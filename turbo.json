@@ -19,6 +19,13 @@
     "test": {
       "outputs": []
     },
+    "test:integration": {
+      "outputs": []
+    },
+    "@repo/worker#test:integration": {
+      "dependsOn": ["@repo/web#build"],
+      "outputs": []
+    },
     "deploy": {
       "dependsOn": ["build"],
       "cache": false
