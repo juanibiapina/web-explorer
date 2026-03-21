@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
+import useWebSocket, { ReadyState } from "react-use-websocket";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface StreamEvent {
@@ -11,43 +12,21 @@ export interface StreamEvent {
  * Receives history replay on connect, then live events.
  */
 export function useExplorerStream() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${window.location.host}/api/stream`;
+
   const [events, setEvents] = useState<StreamEvent[]>([]);
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const connect = useCallback(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/stream`);
-    wsRef.current = ws;
-
-    ws.onopen = () => setConnected(true);
-
-    ws.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data) as StreamEvent;
-        if (event.event === "history-end") return;
-        setEvents((prev) => [...prev, event]);
-      } catch {
-        /* ignore malformed */
-      }
-    };
-
-    ws.onclose = () => {
-      setConnected(false);
-      reconnectTimer.current = setTimeout(connect, 3000);
-    };
-
-    ws.onerror = () => ws.close();
-  }, []);
+  const { lastJsonMessage, readyState } = useWebSocket<StreamEvent>(wsUrl, {
+    shouldReconnect: () => true,
+    reconnectAttempts: Infinity,
+    reconnectInterval: 3000,
+  });
 
   useEffect(() => {
-    connect();
-    return () => {
-      clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
-    };
-  }, [connect]);
+    if (!lastJsonMessage) return;
+    if (lastJsonMessage.event === "history-end") return;
+    setEvents((prev) => [...prev, lastJsonMessage]);
+  }, [lastJsonMessage]);
 
-  return { events, connected };
+  return { events, connected: readyState === ReadyState.OPEN };
 }
