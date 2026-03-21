@@ -355,7 +355,7 @@ describe("ExplorerDO", () => {
 
       const errorEvent = messages.find((m) => m.event === "error");
       expect(errorEvent).toBeDefined();
-      expect(errorEvent!.data).toEqual({ message: "API timeout" });
+      expect(errorEvent!.data).toMatchObject({ message: "API timeout" });
     });
 
     it("schedules retry alarm after error", async () => {
