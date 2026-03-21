@@ -64,6 +64,22 @@ describe("pickSeed", () => {
       "fake-llm"
     );
   });
+
+  it("throws on invalid LLM response shape", async () => {
+    mockLlm.mockResolvedValue({ something: "wrong" });
+
+    await expect(pickSeed(KEYS)).rejects.toThrow(
+      "LLM returned invalid seed response"
+    );
+  });
+
+  it("throws when LLM returns non-string query", async () => {
+    mockLlm.mockResolvedValue({ query: 42, reason: "test" });
+
+    await expect(pickSeed(KEYS)).rejects.toThrow(
+      "LLM returned invalid seed response"
+    );
+  });
 });
 
 describe("exploreStep", () => {
@@ -183,6 +199,62 @@ describe("exploreStep", () => {
 
     expect(mockSearch).toHaveBeenCalledWith("query", "fake-tavily");
     expect(mockLlm).toHaveBeenCalledWith(expect.any(Array), "fake-llm");
+  });
+
+  it("throws when LLM returns response without card", async () => {
+    mockSearch.mockResolvedValue([
+      { title: "R", url: "https://r.com", content: "C" },
+    ]);
+
+    mockLlm.mockResolvedValue({
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    await expect(
+      exploreStep("query", [], 1, KEYS)
+    ).rejects.toThrow("LLM returned invalid explore response");
+  });
+
+  it("throws when LLM returns card missing required fields", async () => {
+    mockSearch.mockResolvedValue([
+      { title: "R", url: "https://r.com", content: "C" },
+    ]);
+
+    mockLlm.mockResolvedValue({
+      card: { title: "Incomplete" },
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    await expect(
+      exploreStep("query", [], 1, KEYS)
+    ).rejects.toThrow("LLM returned invalid explore response");
+  });
+
+  it("defaults details to empty object when LLM omits it", async () => {
+    mockSearch.mockResolvedValue([
+      { title: "R", url: "https://r.com", content: "C" },
+    ]);
+
+    const cardWithoutDetails = {
+      title: "Test",
+      type: "article",
+      summary: "Summary",
+      url: "https://example.com",
+      whyInteresting: "Why",
+      thread: { from: "origin", reasoning: "Starting" },
+      // no details field
+    };
+
+    mockLlm.mockResolvedValue({
+      card: cardWithoutDetails,
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    const result = await exploreStep("query", [], 1, KEYS);
+    expect(result.card.details).toEqual({});
   });
 });
 

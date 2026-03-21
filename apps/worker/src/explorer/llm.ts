@@ -35,8 +35,28 @@ export async function llm(
   }
 
   const data = (await res.json()) as {
-    choices: Array<{ message: { content: string } }>;
+    choices: Array<{ message: { content: string }; finish_reason: string }>;
   };
 
-  return JSON.parse(data.choices[0].message.content);
+  if (!data.choices?.length) {
+    throw new Error("LLM returned no choices");
+  }
+
+  const choice = data.choices[0];
+  const content = choice.message?.content;
+  if (!content) {
+    const reason = choice.finish_reason || "unknown";
+    throw new Error(
+      `LLM returned empty content (finish_reason: ${reason}). ` +
+        "This often means all tokens were consumed by reasoning."
+    );
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch {
+    throw new Error(
+      `LLM returned non-JSON content: ${content.slice(0, 200)}`
+    );
+  }
 }

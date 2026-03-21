@@ -22,5 +22,5 @@ export type StreamEvent =
   | { event: "seed"; data: { query: string; reason: string } }
   | { event: "status"; data: { step: number; total: number; query: string } }
   | { event: "card"; data: Card }
-  | { event: "error"; data: { message: string } }
+  | { event: "error"; data: { message: string; retryInMs?: number } }
   | { event: "done"; data: { totalCards: number } };
