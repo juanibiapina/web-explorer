@@ -25,7 +25,7 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["ExplorerDO"]
+      "new_sqlite_classes": ["ExplorerDO"]
     }
   ]
 }

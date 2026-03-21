@@ -23,6 +23,8 @@ import { pickSeed, exploreStep } from "../explorer/explore";
 const BUFFER_SIZE = 50;
 const STEPS_PER_ROUND = 12;
 const PAUSE_BETWEEN_ROUNDS_MS = 5000;
+const RETRY_BASE_MS = 5000;
+const RETRY_MAX_MS = 120000; // 2 minutes
 
 interface ExplorerState {
   cards: Card[];
@@ -31,6 +33,7 @@ interface ExplorerState {
   step: number;
   maxSteps: number;
   running: boolean;
+  consecutiveErrors: number;
 }
 
 export class ExplorerDO extends DurableObject<Env> {
@@ -41,6 +44,7 @@ export class ExplorerDO extends DurableObject<Env> {
     step: 0,
     maxSteps: STEPS_PER_ROUND,
     running: false,
+    consecutiveErrors: 0,
   };
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -118,6 +122,7 @@ export class ExplorerDO extends DurableObject<Env> {
       this.state.cards.push(card);
       this.broadcast({ event: "card", data: card });
       this.state.query = nextQuery;
+      this.state.consecutiveErrors = 0;
 
       // Schedule next step or start a new round
       if (this.state.step >= this.state.maxSteps) {
@@ -131,10 +136,17 @@ export class ExplorerDO extends DurableObject<Env> {
         await this.scheduleNext(100);
       }
     } catch (err) {
+      this.state.consecutiveErrors++;
       const message = err instanceof Error ? err.message : String(err);
-      this.broadcast({ event: "error", data: { message } });
-      // Retry after a delay on error
-      await this.scheduleNext(10000);
+      const retryMs = Math.min(
+        RETRY_BASE_MS * 2 ** (this.state.consecutiveErrors - 1),
+        RETRY_MAX_MS
+      );
+      this.broadcast({
+        event: "error",
+        data: { message, retryInMs: retryMs },
+      });
+      await this.scheduleNext(retryMs);
     }
   }
 
