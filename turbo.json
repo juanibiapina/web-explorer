@@ -19,10 +19,6 @@
     "test": {
       "outputs": []
     },
-    "@repo/worker#test": {
-      "dependsOn": ["@repo/web#build"],
-      "outputs": []
-    },
     "deploy": {
       "dependsOn": ["build"],
       "cache": false
