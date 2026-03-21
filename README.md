@@ -70,13 +70,19 @@ For production, set them via `wrangler secret put`.
    ```
    This opens a browser for OAuth. Alternatively, set a `CLOUDFLARE_API_TOKEN` env var.
 
-2. Set production secrets:
+2. Set production secrets (pick one):
+
+   **Option A:** Push from `.dev.vars` (recommended if you already have local dev working):
+   ```bash
+   ./scripts/push-secrets.sh
+   ```
+
+   **Option B:** Set interactively:
    ```bash
    cd apps/worker
    npx wrangler secret put TAVILY_API_KEY
    npx wrangler secret put ZAI_API_KEY
    ```
-   Wrangler prompts for each value interactively.
 
 3. Deploy:
    ```bash
@@ -88,7 +94,11 @@ For production, set them via `wrangler secret put`.
 
 4. Smoke test:
    ```bash
+   # Quick check (infrastructure only):
    ./scripts/smoke-test.sh https://web-explorer.<account-subdomain>.workers.dev
+
+   # Deep check (waits for a live exploration card, ~60s):
+   ./scripts/smoke-test.sh https://web-explorer.<account-subdomain>.workers.dev --deep
    ```
 
 ### Subsequent deploys

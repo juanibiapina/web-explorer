@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
 #
 # Smoke test for a deployed web-explorer instance.
-# Usage: ./scripts/smoke-test.sh https://web-explorer.<subdomain>.workers.dev
+# Usage: ./scripts/smoke-test.sh <base-url> [--deep]
+#
+# Without --deep: checks infrastructure (health, frontend, WebSocket connect).
+# With --deep: also waits for a live card from the exploration loop (~60s).
 #
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <base-url>"
+  echo "Usage: $0 <base-url> [--deep]"
   echo "Example: $0 https://web-explorer.your-account.workers.dev"
+  echo "         $0 https://web-explorer.your-account.workers.dev --deep"
   exit 1
 fi
 
 BASE_URL="${1%/}"
+DEEP=false
+[ "${2:-}" = "--deep" ] && DEEP=true
+
 PASS=0
 FAIL=0
 
@@ -19,6 +26,7 @@ pass() { echo "  ✓ $1"; PASS=$((PASS + 1)); }
 fail() { echo "  ✗ $1"; FAIL=$((FAIL + 1)); }
 
 echo "Smoke testing: $BASE_URL"
+[ "$DEEP" = true ] && echo "(deep mode: will wait for live card)"
 echo
 
 # 1. Health endpoint
@@ -80,6 +88,46 @@ if echo "$WS_RESULT" | grep -q "ok:card"; then
   pass "WebSocket received card events from history replay"
 else
   echo "  - No cards in history (expected on first deploy)"
+fi
+
+# 5. Deep check: wait for a live card from the exploration loop
+if [ "$DEEP" = true ]; then
+  echo "5. Exploration produces cards"
+  CARD_RESULT=$(node -e "
+const ws = new WebSocket('${WS_URL}/api/stream');
+const timeout = setTimeout(() => { console.log('timeout'); process.exit(1); }, 60000);
+let historyDone = false;
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.event === 'history-end') {
+    historyDone = true;
+    return;
+  }
+  if (msg.event === 'error') {
+    console.log('error:' + (msg.data?.message || 'unknown'));
+    clearTimeout(timeout);
+    ws.close();
+    return;
+  }
+  if (msg.event === 'card' && historyDone) {
+    console.log('ok:live-card:' + (msg.data?.title || '').slice(0, 60));
+    clearTimeout(timeout);
+    ws.close();
+  }
+};
+ws.onerror = () => { console.log('ws-error'); clearTimeout(timeout); process.exit(1); };
+ws.onclose = () => process.exit(0);
+" 2>/dev/null || true)
+
+  if echo "$CARD_RESULT" | grep -q "ok:live-card"; then
+    CARD_TITLE=$(echo "$CARD_RESULT" | grep "ok:live-card" | sed 's/ok:live-card://')
+    pass "Exploration produced a live card: $CARD_TITLE"
+  elif echo "$CARD_RESULT" | grep -q "^error:"; then
+    ERROR_MSG=$(echo "$CARD_RESULT" | grep "^error:" | sed 's/^error://')
+    fail "Exploration error: $ERROR_MSG"
+  else
+    fail "No live card received within 60s (got: $CARD_RESULT)"
+  fi
 fi
 
 echo
