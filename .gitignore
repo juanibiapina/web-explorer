@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.turbo/
+.wrangler/
+.env
+.env.local
+*.log
+PROMPT.md

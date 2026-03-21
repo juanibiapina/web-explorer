@@ -1,0 +1,14 @@
+import { Feed } from "./components/Feed";
+import { Header } from "./components/Header";
+import { useExplorerStream } from "./hooks/useExplorerStream";
+
+export function App() {
+  const { events, connected } = useExplorerStream();
+
+  return (
+    <div className="min-h-screen">
+      <Header connected={connected} />
+      <Feed events={events} />
+    </div>
+  );
+}
