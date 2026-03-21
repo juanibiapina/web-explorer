@@ -70,6 +70,20 @@ async function yieldEvent() {
   await new Promise((r) => setTimeout(r, 50));
 }
 
+/**
+ * Wait until a condition is true, polling every 10ms.
+ * Useful when alarm chaining makes delivery timing unpredictable.
+ */
+async function waitFor(
+  condition: () => boolean,
+  timeoutMs = 2000
+): Promise<void> {
+  const start = Date.now();
+  while (!condition() && Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 let testCounter = 0;
 function uniqueName() {
   return `test-${++testCounter}`;
@@ -172,21 +186,28 @@ describe("ExplorerDO", () => {
       expect(ran).toBe(true);
     });
 
-    it("does not schedule a second alarm from a second connection", async () => {
+    it("does not restart exploration when a second viewer connects", async () => {
       const stub = getStub(uniqueName());
       await connectWs(stub);
 
-      // Run first alarm to advance state
+      // First alarm picks seed and starts exploration
       await runDurableObjectAlarm(stub);
+      expect(mockPickSeed).toHaveBeenCalledTimes(1);
 
-      // Second connection should not double-schedule
+      // Second viewer connects while exploration is running
       await connectWs(stub);
 
-      // Exactly one alarm should be pending: run it, then verify no second one exists
-      const firstRan = await runDurableObjectAlarm(stub);
-      expect(firstRan).toBe(true);
-      const secondRan = await runDurableObjectAlarm(stub);
-      expect(secondRan).toBe(false);
+      // pickSeed should NOT have been called again.
+      // If the second connection incorrectly triggered a new alarm chain,
+      // it would reset state and call pickSeed for a fresh round.
+      expect(mockPickSeed).toHaveBeenCalledTimes(1);
+
+      // running flag should still be true
+      const running = await runInDurableObject(stub, (instance) => {
+        return (instance as unknown as { state: { running: boolean } }).state
+          .running;
+      });
+      expect(running).toBe(true);
     });
 
     it("picks seed and broadcasts seed event on first alarm", async () => {
@@ -316,15 +337,20 @@ describe("ExplorerDO", () => {
   });
 
   describe("error recovery", () => {
+    // NOTE: In the test environment, alarms may auto-fire during connectWs's
+    // yieldEvent. Set rejection mocks BEFORE connecting to avoid races where
+    // the alarm runs with the default success mock.
+
     it("broadcasts error when exploration step fails", async () => {
       const stub = getStub(uniqueName());
+
+      // All exploreStep calls fail. This avoids races with auto-fired alarms:
+      // even if alarms chain during connectWs, every step produces an error.
+      mockExploreStep.mockRejectedValue(new Error("API timeout"));
+
       const { messages } = await connectWs(stub);
-      messages.length = 0;
-
-      mockExploreStep.mockRejectedValueOnce(new Error("API timeout"));
-
       await runDurableObjectAlarm(stub);
-      await yieldEvent();
+      await waitFor(() => messages.some((m) => m.event === "error"));
 
       const errorEvent = messages.find((m) => m.event === "error");
       expect(errorEvent).toBeDefined();
@@ -333,38 +359,48 @@ describe("ExplorerDO", () => {
 
     it("schedules retry alarm after error", async () => {
       const stub = getStub(uniqueName());
+
+      // All calls fail so auto-fired alarms also produce errors + retries
+      mockExploreStep.mockRejectedValue(new Error("API timeout"));
+
       await connectWs(stub);
-
-      mockExploreStep.mockRejectedValueOnce(new Error("API timeout"));
-
       await runDurableObjectAlarm(stub);
 
-      // Retry alarm should be scheduled
+      // Retry alarm should be scheduled (from error handler's scheduleNext)
       const ran = await runDurableObjectAlarm(stub);
       expect(ran).toBe(true);
     });
 
     it("recovers after a transient error", async () => {
       const stub = getStub(uniqueName());
+
+      // All calls fail initially
+      mockExploreStep.mockRejectedValue(new Error("transient"));
+
       const { messages } = await connectWs(stub);
-
-      // First alarm: seed succeeds but step fails
-      mockExploreStep.mockRejectedValueOnce(new Error("transient"));
       await runDurableObjectAlarm(stub);
+      await waitFor(() => messages.some((m) => m.event === "error"));
 
-      // Second alarm: step succeeds
+      // Now set recovery mock and run retry
       mockExploreStep.mockResolvedValue({
         card: makeCard({ title: "Recovery Card" }),
         nextQuery: "recovered",
         nextReason: "back on track",
       });
-      messages.length = 0;
       await runDurableObjectAlarm(stub);
-      await yieldEvent();
+      await waitFor(() =>
+        messages.some(
+          (m) =>
+            m.event === "card" &&
+            (m.data as Card).title === "Recovery Card"
+        )
+      );
 
-      const cardEvent = messages.find((m) => m.event === "card");
+      const cardEvent = messages.find(
+        (m) =>
+          m.event === "card" && (m.data as Card).title === "Recovery Card"
+      );
       expect(cardEvent).toBeDefined();
-      expect((cardEvent!.data as Card).title).toBe("Recovery Card");
     });
   });
 
