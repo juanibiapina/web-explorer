@@ -62,11 +62,27 @@ For production, set them via `wrangler secret put`.
 
 ## Deploy
 
+### Manual
+
 ```bash
 pnpm deploy
 ```
 
 Deploys the worker (with bundled frontend assets) to Cloudflare.
+
+### Workers Builds (CI/CD)
+
+The repo is connected to Cloudflare Workers Builds for automatic deploys on push to `main`. Workers Builds ignores the `build` field in `wrangler.jsonc`, so the build/deploy commands must be configured in the Cloudflare dashboard under **Settings > Build**.
+
+**Dashboard configuration:**
+
+| Setting | Value |
+|---------|-------|
+| Root directory | `apps/worker` |
+| Build command | `cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @repo/web build` |
+| Deploy command | `npx wrangler deploy` |
+
+The build command navigates to the monorepo root, installs all workspace dependencies, then builds the frontend (which the worker serves as static assets from `../web/dist`).
 
 ## Architecture
 
