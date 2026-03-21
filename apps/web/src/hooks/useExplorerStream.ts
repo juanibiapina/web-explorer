@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface StreamEvent {
   event: string;
-  data: any;
+  data: unknown;
 }
 
 /**
@@ -16,17 +15,19 @@ export function useExplorerStream() {
   const wsUrl = `${protocol}//${window.location.host}/api/stream`;
 
   const [events, setEvents] = useState<StreamEvent[]>([]);
-  const { lastJsonMessage, readyState } = useWebSocket<StreamEvent>(wsUrl, {
+
+  const onMessage = useCallback((message: MessageEvent) => {
+    const parsed: StreamEvent = JSON.parse(message.data);
+    if (parsed.event === "history-end") return;
+    setEvents((prev) => [...prev, parsed]);
+  }, []);
+
+  const { readyState } = useWebSocket(wsUrl, {
     shouldReconnect: () => true,
     reconnectAttempts: Infinity,
     reconnectInterval: 3000,
+    onMessage,
   });
-
-  useEffect(() => {
-    if (!lastJsonMessage) return;
-    if (lastJsonMessage.event === "history-end") return;
-    setEvents((prev) => [...prev, lastJsonMessage]);
-  }, [lastJsonMessage]);
 
   return { events, connected: readyState === ReadyState.OPEN };
 }

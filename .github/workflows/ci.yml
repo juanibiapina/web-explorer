@@ -23,6 +23,9 @@ jobs:
       - name: Typecheck
         run: pnpm turbo typecheck
 
+      - name: Lint
+        run: pnpm turbo lint
+
       - name: Unit tests
         run: pnpm turbo test
 
