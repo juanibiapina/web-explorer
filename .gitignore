@@ -4,5 +4,6 @@ dist/
 .wrangler/
 .env
 .env.local
+.dev.vars
 *.log
 PROMPT.md

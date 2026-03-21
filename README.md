@@ -29,19 +29,36 @@ packages/
 
 ## Development
 
-```bash
-pnpm install
-pnpm dev
-```
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+
+2. Set up secrets:
+   ```bash
+   cp apps/worker/.dev.vars.example apps/worker/.dev.vars
+   ```
+   Edit `apps/worker/.dev.vars` and fill in your API keys.
+
+3. Start the dev server:
+   ```bash
+   pnpm dev
+   ```
 
 This starts the Vite dev server and Wrangler in parallel. The frontend proxies `/api/*` to the worker.
 
 ## Environment variables
 
-The worker needs these secrets (set via `wrangler secret put`):
+The worker needs these secrets at runtime:
 
-- `TAVILY_API_KEY` - Tavily search API key
-- `ZAI_API_KEY` - Z.AI API key for LLM
+| Variable | Purpose |
+|----------|---------|
+| `TAVILY_API_KEY` | Tavily search API key |
+| `ZAI_API_KEY` | Z.AI API key for LLM |
+
+For local development, these are read from `apps/worker/.dev.vars` (gitignored). See `apps/worker/.dev.vars.example` for the template.
+
+For production, set them via `wrangler secret put`.
 
 ## Deploy
 
