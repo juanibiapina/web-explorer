@@ -182,9 +182,11 @@ describe("ExplorerDO", () => {
       // Second connection should not double-schedule
       await connectWs(stub);
 
-      // Only one alarm should be pending (from the first alarm's scheduleNext)
-      const ran = await runDurableObjectAlarm(stub);
-      expect(ran).toBe(true);
+      // Exactly one alarm should be pending: run it, then verify no second one exists
+      const firstRan = await runDurableObjectAlarm(stub);
+      expect(firstRan).toBe(true);
+      const secondRan = await runDurableObjectAlarm(stub);
+      expect(secondRan).toBe(false);
     });
 
     it("picks seed and broadcasts seed event on first alarm", async () => {
