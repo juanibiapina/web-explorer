@@ -13,7 +13,7 @@ export default defineWorkersConfig({
     include: ["src/ExplorerDO/**/*.test.ts"],
     poolOptions: {
       workers: {
-        wrangler: { configPath: "./wrangler.jsonc" },
+        wrangler: { configPath: "./wrangler.test.jsonc" },
         miniflare: {
           bindings: {
             TAVILY_API_KEY: "test-tavily-key",
