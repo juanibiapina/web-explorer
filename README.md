@@ -62,13 +62,42 @@ For production, set them via `wrangler secret put`.
 
 ## Deploy
 
-### Manual
+### First deploy
+
+1. Log in to Cloudflare:
+   ```bash
+   npx wrangler login
+   ```
+   This opens a browser for OAuth. Alternatively, set a `CLOUDFLARE_API_TOKEN` env var.
+
+2. Set production secrets:
+   ```bash
+   cd apps/worker
+   npx wrangler secret put TAVILY_API_KEY
+   npx wrangler secret put ZAI_API_KEY
+   ```
+   Wrangler prompts for each value interactively.
+
+3. Deploy:
+   ```bash
+   cd ../..
+   pnpm deploy
+   ```
+   This builds the frontend, bundles it as worker assets, and deploys everything.
+   The worker goes live at `https://web-explorer.<account-subdomain>.workers.dev`.
+
+4. Smoke test:
+   ```bash
+   ./scripts/smoke-test.sh https://web-explorer.<account-subdomain>.workers.dev
+   ```
+
+### Subsequent deploys
 
 ```bash
 pnpm deploy
 ```
 
-Deploys the worker (with bundled frontend assets) to Cloudflare.
+Secrets persist across deploys. Only code and assets are updated.
 
 ### Workers Builds (CI/CD)
 
