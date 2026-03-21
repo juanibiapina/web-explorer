@@ -45,7 +45,23 @@ packages/
    pnpm dev
    ```
 
-This starts the Vite dev server and Wrangler in parallel. The frontend proxies `/api/*` to the worker.
+This starts the Vite dev server (port 5173) and Wrangler (port 8787) in parallel. The frontend proxies `/api/*` to the worker. Open http://localhost:5173 to see the feed.
+
+### NixOS
+
+On NixOS, the npm-installed `workerd` binary can't run because it's dynamically linked for generic Linux. A `shell.nix` is provided that:
+
+- Patches the `workerd` binary with a working nix-provided version
+- Sets `SSL_CERT_DIR` so workerd's BoringSSL trusts TLS certificates
+- Provides `node`, `pnpm`, and `wrangler`
+
+```bash
+nix-shell
+pnpm install   # first time only
+pnpm dev
+```
+
+The `shellHook` patches `workerd` automatically on each shell entry. You only need `pnpm install` once (or after lockfile changes).
 
 ## Environment variables
 
