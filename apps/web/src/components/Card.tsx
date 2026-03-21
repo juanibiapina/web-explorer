@@ -31,21 +31,21 @@ export function Card({ data, borderColor }: CardProps) {
     <div
       className={`bg-surface border border-border ${borderColor} border-l-2 p-4 animate-in fade-in slide-in-from-bottom-3`}
     >
-      <div className="flex items-center gap-2 mb-1 text-[0.65rem]">
+      <div className="flex items-center gap-2 mb-1.5 text-[0.7rem] sm:text-[0.65rem]">
         <span className={`${accent} font-bold uppercase tracking-wider`}>
           {data.type}
         </span>
         {domain && (
-          <span className="text-text-dim ml-auto">{domain}</span>
+          <span className="text-text-dim ml-auto truncate max-w-[40%]">{domain}</span>
         )}
       </div>
 
-      <h2 className="text-base font-bold mb-1 leading-snug">
+      <h2 className="text-[0.95rem] sm:text-base font-bold mb-1.5 leading-snug">
         <a
           href={data.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-text-primary hover:text-electric-cyan transition-colors"
+          className="text-text-primary active:text-electric-cyan sm:hover:text-electric-cyan transition-colors"
         >
           {data.title}
         </a>
@@ -83,10 +83,10 @@ function Details({
           key={i}
           className={
             item.badge
-              ? "bg-surface-hover border border-border px-1.5 text-[0.65rem] text-text-secondary"
+              ? "bg-surface-hover border border-border px-2 py-0.5 text-[0.7rem] sm:text-[0.65rem] text-text-secondary"
               : item.tag
-                ? "bg-surface-hover border border-border px-1.5 text-[0.65rem] text-text-dim"
-                : "text-[0.7rem] text-text-dim"
+                ? "bg-surface-hover border border-border px-2 py-0.5 text-[0.7rem] sm:text-[0.65rem] text-text-dim"
+                : "text-xs sm:text-[0.7rem] text-text-dim"
           }
         >
           {item.text}

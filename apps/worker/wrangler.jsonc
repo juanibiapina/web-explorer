@@ -3,6 +3,9 @@
   "name": "web-explorer",
   "main": "./src/index.ts",
   "compatibility_date": "2025-07-09",
+  "build": {
+    "command": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @repo/web build"
+  },
   "compatibility_flags": [
     "nodejs_compat"
   ],

@@ -25,7 +25,7 @@ export function Feed({ events }: FeedProps) {
   }, [events.length]);
 
   return (
-    <main className="max-w-[640px] mx-auto px-6 pb-24">
+    <main className="max-w-[640px] mx-auto px-4 pb-24 sm:px-6" style={{ paddingBottom: "max(6rem, calc(2rem + env(safe-area-inset-bottom)))" }}>
       {events.map((e, i) => {
         switch (e.event) {
           case "seed":
@@ -116,9 +116,9 @@ function CardEntry({
   return (
     <>
       {showThread && data.thread?.reasoning && (
-        <div className="pl-4 relative py-1 animate-in fade-in">
+        <div className="pl-4 relative py-2 animate-in fade-in">
           <div className="absolute left-2 top-0 bottom-0 w-px bg-border" />
-          <p className="text-[0.7rem] text-text-dim pl-2.5 leading-relaxed">
+          <p className="text-xs text-text-dim pl-2.5 leading-relaxed">
             <span className="text-purple-haze">&gt; </span>
             {data.thread.reasoning}
           </p>
