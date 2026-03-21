@@ -96,6 +96,55 @@ describe("llm", () => {
 
     await expect(
       llm([{ role: "user", content: "test" }], "key")
-    ).rejects.toThrow();
+    ).rejects.toThrow("LLM returned non-JSON content: not json at all");
+  });
+
+  it("throws when response has no choices", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ choices: [] }),
+    });
+
+    await expect(
+      llm([{ role: "user", content: "test" }], "key")
+    ).rejects.toThrow("LLM returned no choices");
+  });
+
+  it("throws with finish_reason when content is empty", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: { content: "" },
+              finish_reason: "length",
+            },
+          ],
+        }),
+    });
+
+    await expect(
+      llm([{ role: "user", content: "test" }], "key")
+    ).rejects.toThrow("empty content (finish_reason: length)");
+  });
+
+  it("throws with finish_reason when content is null", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: { content: null },
+              finish_reason: "stop",
+            },
+          ],
+        }),
+    });
+
+    await expect(
+      llm([{ role: "user", content: "test" }], "key")
+    ).rejects.toThrow("empty content");
   });
 });

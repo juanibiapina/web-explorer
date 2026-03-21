@@ -5,9 +5,39 @@
  * emit a structured card, and decide where to explore next.
  */
 
+import { z } from "zod";
 import { search } from "./search";
 import { llm } from "./llm";
 import type { Card, StreamEvent } from "./types";
+
+/**
+ * Zod schemas for validating LLM responses.
+ * The LLM often returns unexpected shapes. Validation turns silent
+ * data corruption into clear, retryable errors.
+ */
+const SeedResponseSchema = z.object({
+  query: z.string(),
+  reason: z.string(),
+});
+
+const CardSchema = z.object({
+  title: z.string(),
+  type: z.string(),
+  summary: z.string(),
+  url: z.string(),
+  whyInteresting: z.string(),
+  thread: z.object({
+    from: z.string(),
+    reasoning: z.string(),
+  }),
+  details: z.record(z.string(), z.unknown()).optional().default({}),
+});
+
+const ExploreResponseSchema = z.object({
+  card: CardSchema,
+  nextQuery: z.string(),
+  nextReason: z.string(),
+});
 
 const SYSTEM_PROMPT = `You are a curious web explorer. You browse the internet following threads of genuine interest. You're like a fascinating friend who always finds the most interesting corners of the web.
 
@@ -75,7 +105,14 @@ export async function pickSeed(keys: ExploreKeys): Promise<{
     ],
     keys.llmKey
   );
-  return result as { query: string; reason: string };
+
+  const parsed = SeedResponseSchema.safeParse(result);
+  if (!parsed.success) {
+    throw new Error(
+      `LLM returned invalid seed response: ${parsed.error.issues.map((i) => i.message).join(", ")}`
+    );
+  }
+  return parsed.data;
 }
 
 export async function exploreStep(
@@ -117,13 +154,18 @@ export async function exploreStep(
     keys.llmKey
   );
 
-  const card = (result as { card: Card }).card;
-  card.id = stepNum;
+  const parsed = ExploreResponseSchema.safeParse(result);
+  if (!parsed.success) {
+    throw new Error(
+      `LLM returned invalid explore response: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")}`
+    );
+  }
 
+  const card: Card = { ...parsed.data.card, id: stepNum };
   return {
     card,
-    nextQuery: (result as { nextQuery: string }).nextQuery,
-    nextReason: (result as { nextReason: string }).nextReason,
+    nextQuery: parsed.data.nextQuery,
+    nextReason: parsed.data.nextReason,
   };
 }
 
