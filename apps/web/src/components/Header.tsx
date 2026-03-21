@@ -4,7 +4,7 @@ interface HeaderProps {
 
 export function Header({ connected }: HeaderProps) {
   return (
-    <header className="max-w-[640px] mx-auto pt-12 pb-6 px-6 text-center">
+    <header className="max-w-[640px] mx-auto pt-8 pb-4 px-4 sm:pt-12 sm:pb-6 sm:px-6 text-center">
       <h1 className="text-2xl font-bold tracking-wide mb-1">
         <span className="text-neon-magenta drop-shadow-[0_0_12px_rgba(255,45,123,0.4)]">
           AGENT
