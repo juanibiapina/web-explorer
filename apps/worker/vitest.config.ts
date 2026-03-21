@@ -16,7 +16,7 @@ export default defineWorkersConfig({
         // Disabled: DO alarm writes (setAlarm) conflict with the storage
         // isolation mechanism. Tests use unique DO names for isolation instead.
         isolatedStorage: false,
-        wrangler: { configPath: "./wrangler.test.jsonc" },
+        wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           bindings: {
             TAVILY_API_KEY: "test-tavily-key",
