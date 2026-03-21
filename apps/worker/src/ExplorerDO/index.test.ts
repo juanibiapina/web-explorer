@@ -22,6 +22,7 @@ import type { ExplorerDO } from "./index";
 import type { Card } from "../explorer/types";
 
 declare module "cloudflare:test" {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   interface ProvidedEnv extends Env {}
 }
 
