@@ -12,7 +12,7 @@ export default tseslint.config(
       "no-trailing-spaces": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
-        { argsIgnorePattern: "^_" },
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
     },
   },
