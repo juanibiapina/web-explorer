@@ -13,6 +13,9 @@ export default defineWorkersConfig({
     include: ["src/ExplorerDO/**/*.test.ts"],
     poolOptions: {
       workers: {
+        // Disabled: DO alarm writes (setAlarm) conflict with the storage
+        // isolation mechanism. Tests use unique DO names for isolation instead.
+        isolatedStorage: false,
         wrangler: { configPath: "./wrangler.test.jsonc" },
         miniflare: {
           bindings: {
