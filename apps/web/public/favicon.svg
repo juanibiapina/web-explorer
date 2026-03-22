@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="4" fill="#0a0a0f"/>
+  <g transform="translate(16,16)">
+    <!-- outer ring -->
+    <circle r="12" fill="none" stroke="#ff2d7b" stroke-width="1.5" opacity="0.5"/>
+    <!-- compass needle: magenta north, cyan south -->
+    <polygon points="0,-11 3,0 0,-3 -3,0" fill="#ff2d7b"/>
+    <polygon points="0,11 3,0 0,3 -3,0" fill="#00f0ff" opacity="0.6"/>
+    <!-- center dot -->
+    <circle r="1.5" fill="#ff2d7b"/>
+  </g>
+</svg>
