@@ -8,7 +8,7 @@ export function App() {
   return (
     <div className="min-h-screen">
       <Header connected={connected} viewerCount={viewerCount} />
-      <Feed events={events} />
+      <Feed events={events} connected={connected} />
     </div>
   );
 }
