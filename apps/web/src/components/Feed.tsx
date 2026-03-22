@@ -40,6 +40,8 @@ export function Feed({ events }: FeedProps) {
                 showThread={i > 0}
               />
             );
+          case "done":
+            return <RoundDivider key={i} />;
           case "error":
             return (
               <div key={i} className="text-center py-4 text-red-400 text-sm animate-in fade-in">
@@ -102,6 +104,18 @@ interface CardData {
   whyInteresting: string;
   thread?: { from: string; reasoning: string };
   details?: Record<string, unknown>;
+}
+
+function RoundDivider() {
+  return (
+    <div className="flex items-center gap-3 py-6 animate-in fade-in" role="separator">
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+      <span className="text-[0.65rem] font-bold uppercase tracking-widest text-text-dim">
+        new thread
+      </span>
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+    </div>
+  );
 }
 
 function CardEntry({

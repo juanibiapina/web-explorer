@@ -165,8 +165,8 @@ export class ExplorerDO extends DurableObject<Env> {
    * Broadcast an event to all connected clients and buffer it.
    */
   private broadcast(event: StreamEvent): void {
-    // Buffer seed and card events for replay
-    if (event.event === "seed" || event.event === "card") {
+    // Buffer seed, card, and done events for replay
+    if (event.event === "seed" || event.event === "card" || event.event === "done") {
       this.state.eventBuffer.push(event);
       while (this.state.eventBuffer.length > BUFFER_SIZE) {
         this.state.eventBuffer.shift();
