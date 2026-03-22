@@ -151,7 +151,7 @@ describe("ExplorerDO", () => {
       ws1.close();
     });
 
-    it("does not replay status or done events", async () => {
+    it("does not replay status events", async () => {
       const stub = getStub(uniqueName());
       const { ws: ws1 } = await connectWs(stub);
 
@@ -166,13 +166,37 @@ describe("ExplorerDO", () => {
       }
       await yieldEvent();
 
-      // New viewer should only see seed + card events, not status/done
+      // New viewer should see seed + card + done events, but not status
       const { messages: msgs2 } = await connectWs(stub);
       const historyEnd = msgs2.findIndex((m) => m.event === "history-end");
       const replay = msgs2.slice(0, historyEnd);
 
       expect(replay.some((m) => m.event === "status")).toBe(false);
-      expect(replay.some((m) => m.event === "done")).toBe(false);
+
+      ws1.close();
+    });
+
+    it("replays done events for round dividers", async () => {
+      const stub = getStub(uniqueName());
+      const { ws: ws1 } = await connectWs(stub);
+
+      // Complete a full round (12 steps)
+      for (let i = 0; i < 12; i++) {
+        mockExploreStep.mockResolvedValue({
+          card: makeCard({ id: i + 1 }),
+          nextQuery: `q${i + 2}`,
+          nextReason: "continuing",
+        });
+        await runDurableObjectAlarm(stub);
+      }
+      await yieldEvent();
+
+      // New viewer should see done event in replay (needed for round dividers)
+      const { messages: msgs2 } = await connectWs(stub);
+      const historyEnd = msgs2.findIndex((m) => m.event === "history-end");
+      const replay = msgs2.slice(0, historyEnd);
+
+      expect(replay.some((m) => m.event === "done")).toBe(true);
 
       ws1.close();
     });
