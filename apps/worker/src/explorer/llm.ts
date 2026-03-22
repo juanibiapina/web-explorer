@@ -14,6 +14,14 @@ export async function llm(
   messages: LlmMessage[],
   apiKey: string
 ): Promise<Record<string, unknown>> {
+  return llmAttempt(messages, apiKey, 1);
+}
+
+async function llmAttempt(
+  messages: LlmMessage[],
+  apiKey: string,
+  attempt: number
+): Promise<Record<string, unknown>> {
   const res = await fetch(`${BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -46,6 +54,13 @@ export async function llm(
   const content = choice.message?.content;
   if (!content) {
     const reason = choice.finish_reason || "unknown";
+
+    // Retry once on finish_reason: length. Reasoning token usage varies
+    // between calls, so a second attempt often succeeds.
+    if (reason === "length" && attempt < 2) {
+      return llmAttempt(messages, apiKey, attempt + 1);
+    }
+
     throw new Error(
       `LLM returned empty content (finish_reason: ${reason}). ` +
         "This often means all tokens were consumed by reasoning."

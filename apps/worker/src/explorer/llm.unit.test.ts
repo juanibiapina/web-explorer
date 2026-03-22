@@ -110,8 +110,8 @@ describe("llm", () => {
     ).rejects.toThrow("LLM returned no choices");
   });
 
-  it("throws with finish_reason when content is empty", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+  it("retries once on finish_reason: length, then throws", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -123,14 +123,75 @@ describe("llm", () => {
           ],
         }),
     });
+    globalThis.fetch = mockFetch;
 
     await expect(
       llm([{ role: "user", content: "test" }], "key")
     ).rejects.toThrow("empty content (finish_reason: length)");
+
+    // Should have called fetch twice (original + one retry)
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("succeeds on retry when first attempt hits finish_reason: length", async () => {
+    let callCount = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              choices: [
+                { message: { content: "" }, finish_reason: "length" },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            choices: [
+              { message: { content: '{"recovered": true}' } },
+            ],
+          }),
+      });
+    });
+
+    const result = await llm(
+      [{ role: "user", content: "test" }],
+      "key"
+    );
+    expect(result).toEqual({ recovered: true });
+    expect(callCount).toBe(2);
+  });
+
+  it("does not retry on finish_reason other than length", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: { content: "" },
+              finish_reason: "stop",
+            },
+          ],
+        }),
+    });
+    globalThis.fetch = mockFetch;
+
+    await expect(
+      llm([{ role: "user", content: "test" }], "key")
+    ).rejects.toThrow("empty content (finish_reason: stop)");
+
+    // Only one call — no retry for non-length reasons
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it("throws with finish_reason when content is null", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
         Promise.resolve({
@@ -142,9 +203,12 @@ describe("llm", () => {
           ],
         }),
     });
+    globalThis.fetch = mockFetch;
 
     await expect(
       llm([{ role: "user", content: "test" }], "key")
     ).rejects.toThrow("empty content");
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });

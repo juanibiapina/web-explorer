@@ -25,6 +25,7 @@ const STEPS_PER_ROUND = 12;
 const PAUSE_BETWEEN_ROUNDS_MS = 5000;
 const RETRY_BASE_MS = 5000;
 const RETRY_MAX_MS = 120000; // 2 minutes
+const MAX_CONSECUTIVE_ERRORS = 3;
 
 interface ExplorerState {
   cards: Card[];
@@ -141,15 +142,33 @@ export class ExplorerDO extends DurableObject<Env> {
     } catch (err) {
       this.state.consecutiveErrors++;
       const message = err instanceof Error ? err.message : String(err);
-      const retryMs = Math.min(
-        RETRY_BASE_MS * 2 ** (this.state.consecutiveErrors - 1),
-        RETRY_MAX_MS
-      );
-      this.broadcast({
-        event: "error",
-        data: { message, retryInMs: retryMs },
-      });
-      await this.scheduleNext(retryMs);
+
+      // After too many consecutive errors, abandon this round and start
+      // fresh. If a query consistently triggers long reasoning or bad
+      // results, retrying it forever won't help.
+      if (this.state.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        this.broadcast({
+          event: "error",
+          data: {
+            message: `${message} — too many errors, starting a new round`,
+          },
+        });
+        this.state.query = null;
+        this.state.step = 0;
+        this.state.cards = [];
+        this.state.consecutiveErrors = 0;
+        await this.scheduleNext(PAUSE_BETWEEN_ROUNDS_MS);
+      } else {
+        const retryMs = Math.min(
+          RETRY_BASE_MS * 2 ** (this.state.consecutiveErrors - 1),
+          RETRY_MAX_MS
+        );
+        this.broadcast({
+          event: "error",
+          data: { message, retryInMs: retryMs },
+        });
+        await this.scheduleNext(retryMs);
+      }
     }
   }
 
