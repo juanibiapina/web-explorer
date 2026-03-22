@@ -19,6 +19,7 @@ export function useExplorerStream() {
   const wsUrl = `${protocol}//${window.location.host}/api/stream`;
 
   const [events, setEvents] = useState<StreamEvent[]>([]);
+  const [viewerCount, setViewerCount] = useState(0);
   const replayBuffer = useRef<StreamEvent[]>([]);
   const replaying = useRef(true);
 
@@ -38,6 +39,12 @@ export function useExplorerStream() {
       return;
     }
 
+    // Viewer count is live-only, not part of the event feed
+    if (parsed.event === "viewers") {
+      setViewerCount((parsed.data as { count: number }).count);
+      return;
+    }
+
     if (replaying.current) {
       replayBuffer.current.push(parsed);
     } else {
@@ -53,5 +60,5 @@ export function useExplorerStream() {
     onMessage,
   });
 
-  return { events, connected: readyState === ReadyState.OPEN };
+  return { events, viewerCount, connected: readyState === ReadyState.OPEN };
 }

@@ -122,12 +122,13 @@ describe("ExplorerDO", () => {
   });
 
   describe("event buffer replay", () => {
-    it("sends history-end to new connections with empty buffer", async () => {
+    it("sends history-end and viewer count to new connections with empty buffer", async () => {
       const stub = getStub(uniqueName());
       const { messages } = await connectWs(stub);
 
-      expect(messages).toHaveLength(1);
+      expect(messages).toHaveLength(2);
       expect(messages[0]).toEqual({ event: "history-end", data: {} });
+      expect(messages[1]).toEqual({ event: "viewers", data: { count: 1 } });
     });
 
     it("replays buffered seed and card events to new connections", async () => {
@@ -432,6 +433,70 @@ describe("ExplorerDO", () => {
       const { messages } = await connectWs(stub);
       const historyEnd = messages.findIndex((m) => m.event === "history-end");
       expect(historyEnd).toBeLessThanOrEqual(50);
+
+      ws1.close();
+    });
+  });
+
+  describe("viewer count", () => {
+    it("broadcasts viewer count on first connection", async () => {
+      const stub = getStub(uniqueName());
+      const { messages } = await connectWs(stub);
+
+      const viewersEvent = messages.find((m) => m.event === "viewers");
+      expect(viewersEvent).toBeDefined();
+      expect(viewersEvent!.data).toEqual({ count: 1 });
+    });
+
+    it("broadcasts updated count when a second viewer connects", async () => {
+      const stub = getStub(uniqueName());
+      const { messages: msgs1 } = await connectWs(stub);
+      msgs1.length = 0;
+
+      await connectWs(stub);
+      await yieldEvent();
+
+      // First viewer gets updated count of 2
+      const viewersEvent = msgs1.find(
+        (m) => m.event === "viewers" && (m.data as { count: number }).count === 2
+      );
+      expect(viewersEvent).toBeDefined();
+    });
+
+    it("broadcasts decreased count when a viewer disconnects", async () => {
+      const stub = getStub(uniqueName());
+      const { ws: ws1 } = await connectWs(stub);
+      const { messages: msgs2 } = await connectWs(stub);
+      msgs2.length = 0;
+
+      ws1.close();
+      await yieldEvent();
+
+      const viewersEvent = msgs2.find(
+        (m) => m.event === "viewers" && (m.data as { count: number }).count === 1
+      );
+      expect(viewersEvent).toBeDefined();
+    });
+
+    it("does not include viewer count in replay buffer", async () => {
+      const stub = getStub(uniqueName());
+      const { ws: ws1 } = await connectWs(stub);
+
+      // Trigger at least one alarm so there are buffered events
+      await runDurableObjectAlarm(stub);
+      await yieldEvent();
+
+      // Second viewer connects and gets replay
+      const { messages: msgs2 } = await connectWs(stub);
+      const historyEnd = msgs2.findIndex((m) => m.event === "history-end");
+      const replay = msgs2.slice(0, historyEnd);
+
+      // Replay should not contain viewers events
+      expect(replay.some((m) => m.event === "viewers")).toBe(false);
+
+      // But a live viewers event should arrive after history-end
+      const liveViewers = msgs2.slice(historyEnd + 1).find((m) => m.event === "viewers");
+      expect(liveViewers).toBeDefined();
 
       ws1.close();
     });
