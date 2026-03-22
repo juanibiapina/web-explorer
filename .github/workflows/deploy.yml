@@ -23,6 +23,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Sync secrets to Cloudflare
+        run: |
+          echo "$TAVILY_API_KEY" | npx wrangler secret put TAVILY_API_KEY --config apps/worker/wrangler.jsonc
+          echo "$ZAI_API_KEY" | npx wrangler secret put ZAI_API_KEY --config apps/worker/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+
       - name: Deploy to Cloudflare
         run: pnpm turbo deploy
         env:

@@ -119,7 +119,7 @@ For production, set them via `wrangler secret put`.
 
 ### Subsequent deploys
 
-Merging to `main` triggers automatic deployment via GitHub Actions. Secrets persist across deploys; only code and assets are updated.
+Merging to `main` triggers automatic deployment via GitHub Actions. Secrets are synced and code is deployed in one step.
 
 For manual deploys:
 ```bash
@@ -128,32 +128,20 @@ pnpm deploy
 
 ### CI/CD setup
 
-The repo uses two GitHub Actions workflows:
+The deploy workflow (`.github/workflows/deploy.yml`) runs on every merge to `main`. It syncs runtime secrets to Cloudflare, builds and deploys the worker, then runs a smoke test.
 
-- **Deploy** (`.github/workflows/deploy.yml`): Runs on merge to `main`. Builds, deploys to Cloudflare, runs smoke test.
-- **Sync Secrets** (`.github/workflows/sync-secrets.yml`): Manual trigger. Pushes runtime secrets to the worker, runs deep smoke test.
-
-Both require these GitHub repository secrets:
+These GitHub repository secrets are required:
 
 | GitHub Secret | Purpose |
 |---------------|---------|
 | `CLOUDFLARE_API_TOKEN` | Wrangler auth (needs Workers Scripts:Edit permission) |
 | `CLOUDFLARE_ACCOUNT_ID` | Target Cloudflare account |
-| `TAVILY_API_KEY` | Pushed to worker as runtime secret |
-| `ZAI_API_KEY` | Pushed to worker as runtime secret |
+| `TAVILY_API_KEY` | Synced to worker as runtime secret |
+| `ZAI_API_KEY` | Synced to worker as runtime secret |
+
+Secrets are synced on every deploy (idempotent). Update a key by changing the GitHub secret and merging any commit to main.
 
 > **Note:** If Cloudflare Workers Builds is enabled in the dashboard for this repo, disconnect it to avoid double deploys.
-
-### Syncing secrets
-
-Runtime secrets persist across code deploys but must be pushed separately when they change.
-
-**Option A: GitHub Actions (recommended).** Trigger the "Sync Secrets" workflow from the Actions tab.
-
-**Option B: Local push.** If you have wrangler auth locally:
-```bash
-./scripts/push-secrets.sh
-```
 
 ## Architecture
 
