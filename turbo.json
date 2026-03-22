@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": ["CLOUDFLARE_API_TOKEN"],
-  "globalPassThroughEnv": ["SSL_CERT_DIR", "SSL_CERT_FILE"],
+  "globalPassThroughEnv": ["SSL_CERT_DIR", "SSL_CERT_FILE", "CLOUDFLARE_ACCOUNT_ID"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
