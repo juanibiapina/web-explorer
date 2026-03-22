@@ -119,31 +119,21 @@ For production, set them via `wrangler secret put`.
 
 ### Subsequent deploys
 
+Merging to `main` triggers automatic deployment via GitHub Actions. Secrets persist across deploys; only code and assets are updated.
+
+For manual deploys:
 ```bash
 pnpm deploy
 ```
 
-Secrets persist across deploys. Only code and assets are updated.
+### CI/CD setup
 
-### Workers Builds (CI/CD)
+The repo uses two GitHub Actions workflows:
 
-The repo is connected to Cloudflare Workers Builds for automatic deploys on push to `main`. Workers Builds ignores the `build` field in `wrangler.jsonc`, so the build/deploy commands must be configured in the Cloudflare dashboard under **Settings > Build**.
+- **Deploy** (`.github/workflows/deploy.yml`): Runs on merge to `main`. Builds, deploys to Cloudflare, runs smoke test.
+- **Sync Secrets** (`.github/workflows/sync-secrets.yml`): Manual trigger. Pushes runtime secrets to the worker, runs deep smoke test.
 
-**Dashboard configuration:**
-
-| Setting | Value |
-|---------|-------|
-| Root directory | `apps/worker` |
-| Build command | `cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @repo/web build` |
-| Deploy command | `npx wrangler deploy` |
-
-The build command navigates to the monorepo root, installs all workspace dependencies, then builds the frontend (which the worker serves as static assets from `../web/dist`).
-
-### Syncing secrets
-
-Runtime secrets (`TAVILY_API_KEY`, `ZAI_API_KEY`) persist across code deploys but must be pushed separately when they change.
-
-**Option A: GitHub Actions (recommended).** Set these GitHub repository secrets, then trigger the "Sync Secrets" workflow from the Actions tab:
+Both require these GitHub repository secrets:
 
 | GitHub Secret | Purpose |
 |---------------|---------|
@@ -151,6 +141,14 @@ Runtime secrets (`TAVILY_API_KEY`, `ZAI_API_KEY`) persist across code deploys bu
 | `CLOUDFLARE_ACCOUNT_ID` | Target Cloudflare account |
 | `TAVILY_API_KEY` | Pushed to worker as runtime secret |
 | `ZAI_API_KEY` | Pushed to worker as runtime secret |
+
+> **Note:** If Cloudflare Workers Builds is enabled in the dashboard for this repo, disconnect it to avoid double deploys.
+
+### Syncing secrets
+
+Runtime secrets persist across code deploys but must be pushed separately when they change.
+
+**Option A: GitHub Actions (recommended).** Trigger the "Sync Secrets" workflow from the Actions tab.
 
 **Option B: Local push.** If you have wrangler auth locally:
 ```bash
