@@ -373,6 +373,54 @@ describe("ExplorerDO", () => {
       expect(ran).toBe(true);
     });
 
+    it("resets round after 3 consecutive errors", async () => {
+      const stub = getStub(uniqueName());
+
+      // All calls fail
+      mockExploreStep.mockRejectedValue(new Error("persistent failure"));
+
+      const { messages } = await connectWs(stub);
+
+      // Fire 3 alarms to hit MAX_CONSECUTIVE_ERRORS
+      for (let i = 0; i < 3; i++) {
+        await runDurableObjectAlarm(stub);
+        await yieldEvent();
+      }
+
+      // Third error should trigger round reset
+      const resetError = messages.find(
+        (m) =>
+          m.event === "error" &&
+          typeof (m.data as { message: string }).message === "string" &&
+          (m.data as { message: string }).message.includes(
+            "starting a new round"
+          )
+      );
+      expect(resetError).toBeDefined();
+
+      // Next alarm should pick a new seed (fresh round)
+      mockPickSeed.mockResolvedValue({
+        query: "fresh start",
+        reason: "reset",
+      });
+      mockExploreStep.mockResolvedValue({
+        card: makeCard({ title: "Fresh Card" }),
+        nextQuery: "next",
+        nextReason: "continuing",
+      });
+
+      messages.length = 0;
+      await runDurableObjectAlarm(stub);
+      await waitFor(() => messages.some((m) => m.event === "seed"));
+
+      const seedEvent = messages.find((m) => m.event === "seed");
+      expect(seedEvent).toBeDefined();
+      expect(seedEvent!.data).toEqual({
+        query: "fresh start",
+        reason: "reset",
+      });
+    });
+
     it("recovers after a transient error", async () => {
       const stub = getStub(uniqueName());
 

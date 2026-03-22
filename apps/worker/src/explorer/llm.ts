@@ -25,6 +25,7 @@ export async function llm(
       messages,
       temperature: 0.9,
       max_tokens: 4096,
+      reasoning_effort: "medium",
       response_format: { type: "json_object" },
     }),
   });
