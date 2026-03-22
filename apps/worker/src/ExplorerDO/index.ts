@@ -71,6 +71,9 @@ export class ExplorerDO extends DurableObject<Env> {
     }
     server.send(JSON.stringify({ event: "history-end", data: {} }));
 
+    // Broadcast updated viewer count to all clients (including the new one)
+    this.broadcastViewerCount();
+
     // Start the exploration loop if not already running
     if (!this.state.running) {
       this.state.running = true;
@@ -216,6 +219,7 @@ export class ExplorerDO extends DurableObject<Env> {
     } catch {
       /* already closed */
     }
+    this.broadcastViewerCount();
   }
 
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
@@ -223,6 +227,22 @@ export class ExplorerDO extends DurableObject<Env> {
       ws.close(1011, "WebSocket error");
     } catch {
       /* already closed */
+    }
+    this.broadcastViewerCount();
+  }
+
+  /**
+   * Broadcast current viewer count to all connected clients.
+   */
+  private broadcastViewerCount(): void {
+    const count = this.ctx.getWebSockets().length;
+    const msg = JSON.stringify({ event: "viewers", data: { count } });
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.send(msg);
+      } catch {
+        /* send failed, ignore */
+      }
     }
   }
 }

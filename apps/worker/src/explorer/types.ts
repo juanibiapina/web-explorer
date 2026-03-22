@@ -23,4 +23,5 @@ export type StreamEvent =
   | { event: "status"; data: { step: number; total: number; query: string } }
   | { event: "card"; data: Card }
   | { event: "error"; data: { message: string; retryInMs?: number } }
-  | { event: "done"; data: { totalCards: number } };
+  | { event: "done"; data: { totalCards: number } }
+  | { event: "viewers"; data: { count: number } };

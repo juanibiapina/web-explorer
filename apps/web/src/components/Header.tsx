@@ -1,8 +1,9 @@
 interface HeaderProps {
   connected: boolean;
+  viewerCount: number;
 }
 
-export function Header({ connected }: HeaderProps) {
+export function Header({ connected, viewerCount }: HeaderProps) {
   return (
     <header className="max-w-[640px] mx-auto pt-8 pb-4 px-4 sm:pt-12 sm:pb-6 sm:px-6 text-center">
       <h1 className="text-2xl font-bold tracking-wide mb-1">
@@ -14,21 +15,28 @@ export function Header({ connected }: HeaderProps) {
       <p className="text-text-dim text-xs tracking-wide mb-4">
         a live stream of curiosity
       </p>
-      <div
-        className={`inline-flex items-center gap-1.5 text-[0.7rem] font-bold uppercase tracking-widest ${
-          connected
-            ? "text-matrix-green drop-shadow-[0_0_8px_rgba(57,255,20,0.3)]"
-            : "text-text-dim"
-        }`}
-      >
-        <span
-          className={`w-1.5 h-1.5 rounded-full ${
+      <div className="inline-flex items-center gap-3">
+        <div
+          className={`inline-flex items-center gap-1.5 text-[0.7rem] font-bold uppercase tracking-widest ${
             connected
-              ? "bg-matrix-green shadow-[0_0_8px_rgba(57,255,20,0.5)] animate-pulse"
-              : "bg-text-dim"
+              ? "text-matrix-green drop-shadow-[0_0_8px_rgba(57,255,20,0.3)]"
+              : "text-text-dim"
           }`}
-        />
-        {connected ? "live" : "connecting"}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              connected
+                ? "bg-matrix-green shadow-[0_0_8px_rgba(57,255,20,0.5)] animate-pulse"
+                : "bg-text-dim"
+            }`}
+          />
+          {connected ? "live" : "connecting"}
+        </div>
+        {connected && viewerCount > 0 && (
+          <div className="text-[0.7rem] font-bold uppercase tracking-widest text-text-dim">
+            {viewerCount} {viewerCount === 1 ? "viewer" : "viewers"}
+          </div>
+        )}
       </div>
     </header>
   );
