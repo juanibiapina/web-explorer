@@ -15,17 +15,21 @@ const TYPE_COLORS: Record<string, string> = {
 
 interface FeedProps {
   events: StreamEvent[];
+  connected: boolean;
 }
 
-export function Feed({ events }: FeedProps) {
+export function Feed({ events, connected }: FeedProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [events.length]);
 
+  const showLoading = events.length === 0;
+
   return (
     <main className="max-w-[640px] mx-auto px-4 pb-24 sm:px-6" style={{ paddingBottom: "max(6rem, calc(2rem + env(safe-area-inset-bottom)))" }}>
+      {showLoading && <LoadingSkeleton connected={connected} />}
       {events.map((e, i) => {
         switch (e.event) {
           case "seed":
@@ -102,6 +106,65 @@ interface CardData {
   whyInteresting: string;
   thread?: { from: string; reasoning: string };
   details?: Record<string, unknown>;
+}
+
+const SKELETON_BORDERS = [
+  "border-l-electric-cyan",
+  "border-l-matrix-green",
+  "border-l-purple-haze",
+];
+
+function LoadingSkeleton({ connected }: { connected: boolean }) {
+  return (
+    <div className="animate-in fade-in">
+      <div className="text-center py-6 mt-2">
+        <div className="text-sm text-text-dim">
+          {connected ? (
+            <>
+              exploring
+              <span className="inline-flex ml-0.5">
+                <span className="animate-pulse">.</span>
+                <span className="animate-pulse [animation-delay:200ms]">.</span>
+                <span className="animate-pulse [animation-delay:400ms]">.</span>
+              </span>
+            </>
+          ) : (
+            "connecting to stream"
+          )}
+        </div>
+      </div>
+      {SKELETON_BORDERS.map((border, i) => (
+        <SkeletonCard key={i} borderColor={border} delay={i * 150} />
+      ))}
+    </div>
+  );
+}
+
+function SkeletonCard({ borderColor, delay }: { borderColor: string; delay: number }) {
+  return (
+    <div
+      className={`bg-surface border border-border ${borderColor} border-l-2 p-4 mb-0 animate-pulse`}
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      {/* Type badge + domain */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="h-3 w-12 bg-surface-hover rounded-sm" />
+        <div className="h-3 w-20 bg-surface-hover rounded-sm ml-auto" />
+      </div>
+      {/* Title */}
+      <div className="h-4 w-4/5 bg-surface-hover rounded-sm mb-2" />
+      {/* Summary lines */}
+      <div className="space-y-1.5 mb-2">
+        <div className="h-3 w-full bg-surface-hover rounded-sm" />
+        <div className="h-3 w-11/12 bg-surface-hover rounded-sm" />
+        <div className="h-3 w-3/5 bg-surface-hover rounded-sm" />
+      </div>
+      {/* Why interesting */}
+      <div className="border-t border-border pt-1.5 mt-0.5">
+        <div className="h-3 w-3/4 bg-surface-hover rounded-sm" />
+      </div>
+    </div>
+  );
 }
 
 function CardEntry({
