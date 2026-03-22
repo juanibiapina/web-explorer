@@ -1,3 +1,5 @@
+import { useState, useCallback } from "react";
+
 interface CardData {
   title: string;
   type: string;
@@ -57,10 +59,66 @@ export function Card({ data, borderColor }: CardProps) {
 
       <Details type={data.type} details={data.details} />
 
-      <div className="text-xs text-text-dim italic leading-relaxed border-t border-border pt-1.5 mt-0.5">
-        {data.whyInteresting}
+      <div className="flex items-start gap-2 border-t border-border pt-1.5 mt-0.5">
+        <div className="text-xs text-text-dim italic leading-relaxed flex-1">
+          {data.whyInteresting}
+        </div>
+        <ShareButton title={data.title} summary={data.summary} url={data.url} />
       </div>
     </div>
+  );
+}
+
+function ShareButton({
+  title,
+  summary,
+  url,
+}: {
+  title: string;
+  summary: string;
+  url: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = useCallback(async () => {
+    const text = `${title}\n${summary}\n${url}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text: summary, url });
+        return;
+      } catch {
+        // User cancelled or share failed, fall through to clipboard
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context)
+    }
+  }, [title, summary, url]);
+
+  return (
+    <button
+      onClick={handleShare}
+      aria-label={copied ? "Copied" : "Share"}
+      className="shrink-0 p-1 text-text-dim active:text-electric-cyan sm:hover:text-electric-cyan transition-colors"
+    >
+      {copied ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+          <polyline points="16 6 12 2 8 6" />
+          <line x1="12" y1="2" x2="12" y2="15" />
+        </svg>
+      )}
+    </button>
   );
 }
 
