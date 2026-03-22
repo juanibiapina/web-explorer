@@ -70,12 +70,12 @@ ws.onmessage = (e) => {
     console.log('ok:history-end');
     clearTimeout(timeout);
     ws.close();
+    process.exit(0);
   } else if (msg.event === 'card') {
     console.log('ok:card');
   }
 };
 ws.onerror = (e) => { console.log('error'); clearTimeout(timeout); process.exit(1); };
-ws.onclose = () => process.exit(0);
 " 2>/dev/null || true)
 
 if echo "$WS_RESULT" | grep -q "ok:history-end"; then
@@ -107,16 +107,16 @@ ws.onmessage = (e) => {
     console.log('error:' + (msg.data?.message || 'unknown'));
     clearTimeout(timeout);
     ws.close();
-    return;
+    process.exit(1);
   }
   if (msg.event === 'card' && historyDone) {
     console.log('ok:live-card:' + (msg.data?.title || '').slice(0, 60));
     clearTimeout(timeout);
     ws.close();
+    process.exit(0);
   }
 };
 ws.onerror = () => { console.log('ws-error'); clearTimeout(timeout); process.exit(1); };
-ws.onclose = () => process.exit(0);
 " 2>/dev/null || true)
 
   if echo "$CARD_RESULT" | grep -q "ok:live-card"; then
