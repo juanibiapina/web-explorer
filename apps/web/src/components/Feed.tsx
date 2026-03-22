@@ -15,9 +15,10 @@ const TYPE_COLORS: Record<string, string> = {
 
 interface FeedProps {
   events: StreamEvent[];
+  connected: boolean;
 }
 
-export function Feed({ events }: FeedProps) {
+export function Feed({ events, connected }: FeedProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function Feed({ events }: FeedProps) {
             return null;
         }
       })}
+      <BottomIndicator connected={connected} />
       <div ref={endRef} />
     </main>
   );
@@ -102,6 +104,42 @@ interface CardData {
   whyInteresting: string;
   thread?: { from: string; reasoning: string };
   details?: Record<string, unknown>;
+}
+
+function BottomIndicator({ connected }: { connected: boolean }) {
+  if (!connected) {
+    return (
+      <div className="text-center py-6 text-sm text-text-dim animate-in fade-in">
+        connecting to stream
+      </div>
+    );
+  }
+
+  return <SkeletonCard />;
+}
+
+function SkeletonCard() {
+  return (
+    <div className="bg-surface border border-border border-l-text-dim border-l-2 p-4 animate-pulse">
+      {/* Type badge + domain */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="h-3 w-12 bg-surface-hover rounded-sm" />
+        <div className="h-3 w-20 bg-surface-hover rounded-sm ml-auto" />
+      </div>
+      {/* Title */}
+      <div className="h-4 w-4/5 bg-surface-hover rounded-sm mb-2" />
+      {/* Summary lines */}
+      <div className="space-y-1.5 mb-2">
+        <div className="h-3 w-full bg-surface-hover rounded-sm" />
+        <div className="h-3 w-11/12 bg-surface-hover rounded-sm" />
+        <div className="h-3 w-3/5 bg-surface-hover rounded-sm" />
+      </div>
+      {/* Why interesting */}
+      <div className="border-t border-border pt-1.5 mt-0.5">
+        <div className="h-3 w-3/4 bg-surface-hover rounded-sm" />
+      </div>
+    </div>
+  );
 }
 
 function CardEntry({
