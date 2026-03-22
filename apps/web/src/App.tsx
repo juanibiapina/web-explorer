@@ -1,9 +1,11 @@
 import { Feed } from "./components/Feed";
 import { Header } from "./components/Header";
+import { useBackgroundNotification } from "./hooks/useBackgroundNotification";
 import { useExplorerStream } from "./hooks/useExplorerStream";
 
 export function App() {
   const { events, viewerCount, connected } = useExplorerStream();
+  useBackgroundNotification(events);
 
   return (
     <div className="min-h-screen">
