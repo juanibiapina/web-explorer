@@ -139,6 +139,24 @@ The repo is connected to Cloudflare Workers Builds for automatic deploys on push
 
 The build command navigates to the monorepo root, installs all workspace dependencies, then builds the frontend (which the worker serves as static assets from `../web/dist`).
 
+### Syncing secrets
+
+Runtime secrets (`TAVILY_API_KEY`, `ZAI_API_KEY`) persist across code deploys but must be pushed separately when they change.
+
+**Option A: GitHub Actions (recommended).** Set these GitHub repository secrets, then trigger the "Sync Secrets" workflow from the Actions tab:
+
+| GitHub Secret | Purpose |
+|---------------|---------|
+| `CLOUDFLARE_API_TOKEN` | Wrangler auth (needs Workers Scripts:Edit permission) |
+| `CLOUDFLARE_ACCOUNT_ID` | Target Cloudflare account |
+| `TAVILY_API_KEY` | Pushed to worker as runtime secret |
+| `ZAI_API_KEY` | Pushed to worker as runtime secret |
+
+**Option B: Local push.** If you have wrangler auth locally:
+```bash
+./scripts/push-secrets.sh
+```
+
 ## Architecture
 
 The `ExplorerDO` Durable Object is the core:
