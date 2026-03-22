@@ -516,6 +516,9 @@ describe("ExplorerDO", () => {
     });
 
     it("ignores malformed messages", async () => {
+      // Block the alarm from producing events during this test
+      mockPickSeed.mockReturnValue(new Promise(() => {}));
+
       const stub = getStub(uniqueName());
       const { ws, messages } = await connectWs(stub);
       messages.length = 0;
@@ -524,8 +527,12 @@ describe("ExplorerDO", () => {
       ws.send(JSON.stringify({ type: "unknown" }));
       await yieldEvent();
 
-      // No crash, no messages sent back
-      expect(messages).toHaveLength(0);
+      // No crash, no messages sent back (filter viewer broadcasts from alarm race)
+      const responses = messages.filter((m) => {
+        const event = (m as { event?: string }).event;
+        return event !== "viewers";
+      });
+      expect(responses).toHaveLength(0);
     });
   });
 });
