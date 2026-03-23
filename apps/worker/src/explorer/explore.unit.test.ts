@@ -21,7 +21,10 @@ import type { Card, StreamEvent } from "./types";
 const mockSearch = vi.mocked(search);
 const mockLlm = vi.mocked(llm);
 
-const KEYS = { tavilyKey: "fake-tavily", llmKey: "fake-llm" };
+const KEYS = {
+  searchKeys: { tavilyKey: "fake-tavily", braveKey: "fake-brave" },
+  llmKey: "fake-llm",
+};
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -184,7 +187,7 @@ describe("exploreStep", () => {
     ).rejects.toThrow('No search results for "empty query"');
   });
 
-  it("passes tavily key to search and llm key to llm", async () => {
+  it("passes search keys to search and llm key to llm", async () => {
     mockSearch.mockResolvedValue([
       { title: "R", url: "https://r.com", content: "C" },
     ]);
@@ -197,7 +200,10 @@ describe("exploreStep", () => {
 
     await exploreStep("query", [], 1, KEYS);
 
-    expect(mockSearch).toHaveBeenCalledWith("query", "fake-tavily");
+    expect(mockSearch).toHaveBeenCalledWith(
+      "query",
+      { tavilyKey: "fake-tavily", braveKey: "fake-brave" }
+    );
     expect(mockLlm).toHaveBeenCalledWith(expect.any(Array), "fake-llm");
   });
 

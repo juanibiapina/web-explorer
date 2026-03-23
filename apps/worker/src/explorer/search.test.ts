@@ -11,14 +11,30 @@ describe("search", () => {
       return;
     }
 
-    const results = await search("linux kernel", apiKey, 3);
+    const results = await search("linux kernel", { tavilyKey: apiKey }, 3);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]).toHaveProperty("title");
     expect(results[0]).toHaveProperty("url");
     expect(results[0]).toHaveProperty("content");
   });
 
-  it("throws on invalid API key", async () => {
-    await expect(search("test", "invalid-key", 1)).rejects.toThrow();
+  it("returns results from Brave Search API", async () => {
+    const apiKey = process.env.BRAVE_API_KEY;
+    if (!apiKey) {
+      console.log("Skipping: BRAVE_API_KEY not set");
+      return;
+    }
+
+    const results = await search("linux kernel", { braveKey: apiKey }, 3);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]).toHaveProperty("title");
+    expect(results[0]).toHaveProperty("url");
+    expect(results[0]).toHaveProperty("content");
+  });
+
+  it("throws on invalid Tavily API key", async () => {
+    await expect(
+      search("test", { tavilyKey: "invalid-key" }, 1)
+    ).rejects.toThrow();
   });
 });

@@ -89,7 +89,10 @@ export class ExplorerDO extends DurableObject<Env> {
    */
   async alarm(): Promise<void> {
     const keys = {
-      tavilyKey: this.env.TAVILY_API_KEY,
+      searchKeys: {
+        tavilyKey: this.env.TAVILY_API_KEY,
+        braveKey: this.env.BRAVE_API_KEY,
+      },
       llmKey: this.env.ZAI_API_KEY,
     };
 

@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { search } from "./search";
+import { search, type SearchKeys } from "./search";
 import { llm } from "./llm";
 import type { Card, StreamEvent } from "./types";
 
@@ -83,7 +83,7 @@ Rules:
 - Your nextQuery should feel like a natural thought: "Wait, if they did X, what about Y?"`;
 
 interface ExploreKeys {
-  tavilyKey: string;
+  searchKeys: SearchKeys;
   llmKey: string;
 }
 
@@ -125,7 +125,7 @@ export async function exploreStep(
   nextQuery: string;
   nextReason: string;
 }> {
-  const results = await search(query, keys.tavilyKey);
+  const results = await search(query, keys.searchKeys);
 
   if (!results.length) {
     throw new Error(`No search results for "${query}"`);
