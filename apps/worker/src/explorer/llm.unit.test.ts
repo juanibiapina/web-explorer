@@ -71,6 +71,7 @@ describe("llm", () => {
     expect(body.messages).toEqual(messages);
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.max_tokens).toBe(4096);
+    expect(body.reasoning_effort).toBe("medium");
   });
 
   it("throws on non-OK response with status and body", async () => {
