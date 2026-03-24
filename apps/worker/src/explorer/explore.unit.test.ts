@@ -13,7 +13,7 @@ vi.mock("./llm", () => ({
   llm: vi.fn(),
 }));
 
-import { pickSeed, exploreStep, exploreRound } from "./explore";
+import { pickSeed, exploreStep, exploreRound, buildDiversityHint } from "./explore";
 import { search } from "./search";
 import { llm } from "./llm";
 import type { Card, StreamEvent } from "./types";
@@ -333,5 +333,120 @@ describe("exploreRound", () => {
     // Should still complete all steps (2 cards + 1 error = 3 steps)
     const doneEvent = events.find((e) => e.event === "done");
     expect(doneEvent).toBeDefined();
+  });
+});
+
+describe("buildDiversityHint", () => {
+  it("returns empty string when fewer than 2 cards", () => {
+    expect(buildDiversityHint([])).toBe("");
+    expect(buildDiversityHint([makeCard()])).toBe("");
+  });
+
+  it("returns empty string when recent types are varied", () => {
+    const cards = [
+      makeCard({ type: "article" }),
+      makeCard({ type: "repo" }),
+      makeCard({ type: "person" }),
+    ];
+    expect(buildDiversityHint(cards)).toBe("");
+  });
+
+  it("returns a hint when same type appears 2+ times consecutively", () => {
+    const cards = [
+      makeCard({ type: "article" }),
+      makeCard({ type: "article" }),
+    ];
+    const hint = buildDiversityHint(cards);
+    expect(hint).toContain("DIVERSITY NOTE");
+    expect(hint).toContain('"article"');
+    expect(hint).toContain("2");
+  });
+
+  it("counts the full streak length", () => {
+    const cards = [
+      makeCard({ type: "repo" }),
+      makeCard({ type: "article" }),
+      makeCard({ type: "article" }),
+      makeCard({ type: "article" }),
+    ];
+    const hint = buildDiversityHint(cards);
+    expect(hint).toContain("3 cards");
+  });
+
+  it("suggests underrepresented types", () => {
+    const cards = [
+      makeCard({ type: "article" }),
+      makeCard({ type: "article" }),
+    ];
+    const hint = buildDiversityHint(cards);
+    expect(hint).toContain("Try finding:");
+    // The suggestions should not include the overrepresented type
+    const suggestionsMatch = hint.match(/Try finding: (.+)\./);
+    expect(suggestionsMatch).not.toBeNull();
+    const suggestions = suggestionsMatch![1];
+    expect(suggestions).not.toContain("article");
+    // Should suggest some valid card types
+    expect(suggestions).toMatch(/repo|person|thread|paper|tool|video|community/);
+  });
+
+  it("does not trigger when streak is broken", () => {
+    const cards = [
+      makeCard({ type: "article" }),
+      makeCard({ type: "article" }),
+      makeCard({ type: "repo" }),
+    ];
+    expect(buildDiversityHint(cards)).toBe("");
+  });
+
+  it("includes diversity hint in LLM prompt when types repeat", async () => {
+    vi.restoreAllMocks();
+    mockSearch.mockResolvedValue([
+      { title: "R", url: "https://r.com", content: "C" },
+    ]);
+
+    mockLlm.mockResolvedValue({
+      card: makeCard(),
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    const previousCards = [
+      makeCard({ type: "article" }),
+      makeCard({ type: "article" }),
+      makeCard({ type: "article" }),
+    ];
+
+    await exploreStep("query", previousCards, 4, KEYS);
+
+    const userMessage = mockLlm.mock.calls[0][0].find(
+      (m: { role: string }) => m.role === "user"
+    );
+    expect(userMessage?.content).toContain("DIVERSITY NOTE");
+  });
+
+  it("does not include diversity hint when types are varied", async () => {
+    vi.restoreAllMocks();
+    mockSearch.mockResolvedValue([
+      { title: "R", url: "https://r.com", content: "C" },
+    ]);
+
+    mockLlm.mockResolvedValue({
+      card: makeCard(),
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    const previousCards = [
+      makeCard({ type: "article" }),
+      makeCard({ type: "repo" }),
+      makeCard({ type: "person" }),
+    ];
+
+    await exploreStep("query", previousCards, 4, KEYS);
+
+    const userMessage = mockLlm.mock.calls[0][0].find(
+      (m: { role: string }) => m.role === "user"
+    );
+    expect(userMessage?.content).not.toContain("DIVERSITY NOTE");
   });
 });
