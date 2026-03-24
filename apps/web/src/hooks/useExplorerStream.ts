@@ -7,41 +7,45 @@ export interface StreamEvent {
 }
 
 /**
- * Connects to the shared exploration WebSocket stream.
+ * Connects to an exploration's WebSocket stream.
  * Receives history replay on connect, then live events.
  *
- * On reconnect, the server replays the last N events as history.
+ * On reconnect, the server replays stored events as history.
  * We collect those into a buffer and replace the entire event list
  * on "history-end" to avoid duplicates from previous connections.
+ *
+ * When the exploration is complete, the server sends a "done" event
+ * and no more events will arrive.
  */
-export function useExplorerStream() {
+export function useExplorerStream(date?: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/api/stream`;
+  const dateParam = date ? `?date=${date}` : "";
+  const wsUrl = `${protocol}//${window.location.host}/api/stream${dateParam}`;
 
   const [events, setEvents] = useState<StreamEvent[]>([]);
-  const [viewerCount, setViewerCount] = useState(0);
+  const [done, setDone] = useState(false);
   const replayBuffer = useRef<StreamEvent[]>([]);
   const replaying = useRef(true);
 
   const onOpen = useCallback(() => {
     replayBuffer.current = [];
     replaying.current = true;
+    setDone(false);
   }, []);
 
   const onMessage = useCallback((message: MessageEvent) => {
     const parsed: StreamEvent = JSON.parse(message.data);
 
     if (parsed.event === "history-end") {
-      // Replace events with the replayed history, discarding stale state
       setEvents([...replayBuffer.current]);
       replayBuffer.current = [];
       replaying.current = false;
       return;
     }
 
-    // Viewer count is live-only, not part of the event feed
-    if (parsed.event === "viewers") {
-      setViewerCount((parsed.data as { count: number }).count);
+    if (parsed.event === "done") {
+      setDone(true);
+      // Don't add to events - the Feed uses the `done` flag
       return;
     }
 
@@ -53,12 +57,12 @@ export function useExplorerStream() {
   }, []);
 
   const { readyState } = useWebSocket(wsUrl, {
-    shouldReconnect: () => true,
+    shouldReconnect: () => !done,
     reconnectAttempts: Infinity,
     reconnectInterval: 3000,
     onOpen,
     onMessage,
   });
 
-  return { events, viewerCount, connected: readyState === ReadyState.OPEN };
+  return { events, connected: readyState === ReadyState.OPEN, done };
 }

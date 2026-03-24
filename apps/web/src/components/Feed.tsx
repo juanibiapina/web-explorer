@@ -15,10 +15,10 @@ const TYPE_COLORS: Record<string, string> = {
 
 interface FeedProps {
   events: StreamEvent[];
-  connected: boolean;
+  generating: boolean;
 }
 
-export function Feed({ events, connected }: FeedProps) {
+export function Feed({ events, generating }: FeedProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function Feed({ events, connected }: FeedProps) {
             return null;
         }
       })}
-      <BottomIndicator connected={connected} />
+      {generating && <SkeletonCard />}
       <div ref={endRef} />
     </main>
   );
@@ -104,18 +104,6 @@ interface CardData {
   whyInteresting: string;
   thread?: { from: string; reasoning: string };
   details?: Record<string, unknown>;
-}
-
-function BottomIndicator({ connected }: { connected: boolean }) {
-  if (!connected) {
-    return (
-      <div className="text-center py-6 text-sm text-text-dim animate-in fade-in">
-        connecting to stream
-      </div>
-    );
-  }
-
-  return <SkeletonCard />;
 }
 
 function SkeletonCard() {
