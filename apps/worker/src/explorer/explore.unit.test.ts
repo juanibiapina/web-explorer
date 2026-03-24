@@ -13,10 +13,10 @@ vi.mock("./llm", () => ({
   llm: vi.fn(),
 }));
 
-import { pickSeed, exploreStep, exploreRound, buildDiversityHint } from "./explore";
+import { pickSeed, exploreStep, buildDiversityHint } from "./explore";
 import { search } from "./search";
 import { llm } from "./llm";
-import type { Card, StreamEvent } from "./types";
+import type { Card } from "./types";
 
 const mockSearch = vi.mocked(search);
 const mockLlm = vi.mocked(llm);
@@ -255,84 +255,6 @@ describe("exploreStep", () => {
 
     const result = await exploreStep("query", [], 1, KEYS);
     expect(result.card.details).toEqual({});
-  });
-});
-
-describe("exploreRound", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("emits seed, status, card, and done events", async () => {
-    mockLlm
-      .mockResolvedValueOnce({ query: "starting topic", reason: "curious" })
-      .mockResolvedValue({
-        card: makeCard(),
-        nextQuery: "next thing",
-        nextReason: "following the thread",
-      });
-
-    mockSearch.mockResolvedValue([
-      { title: "Result", url: "https://r.com", content: "Content" },
-    ]);
-
-    const events: StreamEvent[] = [];
-    await exploreRound((e) => events.push(e), KEYS, 2);
-
-    const types = events.map((e) => e.event);
-    expect(types[0]).toBe("seed");
-    expect(types).toContain("status");
-    expect(types).toContain("card");
-    expect(types[types.length - 1]).toBe("done");
-  });
-
-  it("runs the specified number of steps", async () => {
-    mockLlm
-      .mockResolvedValueOnce({ query: "seed", reason: "start" })
-      .mockResolvedValue({
-        card: makeCard(),
-        nextQuery: "next",
-        nextReason: "reason",
-      });
-
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
-
-    const events: StreamEvent[] = [];
-    await exploreRound((e) => events.push(e), KEYS, 4);
-
-    const cardEvents = events.filter((e) => e.event === "card");
-    expect(cardEvents).toHaveLength(4);
-
-    const doneEvent = events.find((e) => e.event === "done");
-    expect(doneEvent?.data).toEqual({ totalCards: 4 });
-  });
-
-  it("emits error event on step failure but continues", async () => {
-    mockLlm
-      .mockResolvedValueOnce({ query: "seed", reason: "start" })
-      .mockRejectedValueOnce(new Error("API timeout"))
-      .mockResolvedValue({
-        card: makeCard(),
-        nextQuery: "next",
-        nextReason: "reason",
-      });
-
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
-
-    const events: StreamEvent[] = [];
-    await exploreRound((e) => events.push(e), KEYS, 3);
-
-    const errorEvents = events.filter((e) => e.event === "error");
-    expect(errorEvents).toHaveLength(1);
-    expect(errorEvents[0].data).toEqual({ message: "API timeout" });
-
-    // Should still complete all steps (2 cards + 1 error = 3 steps)
-    const doneEvent = events.find((e) => e.event === "done");
-    expect(doneEvent).toBeDefined();
   });
 });
 

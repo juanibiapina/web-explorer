@@ -12,6 +12,9 @@
   "observability": {
     "enabled": true
   },
+  "triggers": {
+    "crons": ["0 6 * * *"]
+  },
   "assets": {
     "directory": "../web/dist",
     "not_found_handling": "single-page-application",
@@ -20,8 +23,12 @@
   "durable_objects": {
     "bindings": [
       {
-        "name": "EXPLORER_DO",
-        "class_name": "ExplorerDO"
+        "name": "INDEX_DO",
+        "class_name": "IndexDO"
+      },
+      {
+        "name": "EXPLORATION_DO",
+        "class_name": "ExplorationDO"
       }
     ]
   },
@@ -29,6 +36,11 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["ExplorerDO"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["IndexDO", "ExplorationDO"],
+      "deleted_classes": ["ExplorerDO"]
     }
   ]
 }

@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { search } from "./search";
 import { llm } from "./llm";
-import type { Card, StreamEvent } from "./types";
+import type { Card } from "./types";
 
 /**
  * Zod schemas for validating LLM responses.
@@ -222,43 +222,4 @@ export async function exploreStep(
   };
 }
 
-/**
- * Run a full exploration round, calling `emit` for each event.
- */
-export async function exploreRound(
-  emit: (event: StreamEvent) => void,
-  keys: ExploreKeys,
-  maxSteps = 12
-): Promise<void> {
-  const seed = await pickSeed(keys);
-  emit({ event: "seed", data: { query: seed.query, reason: seed.reason } });
 
-  const cards: Card[] = [];
-  let query = seed.query;
-
-  for (let step = 1; step <= maxSteps; step++) {
-    emit({
-      event: "status",
-      data: { step, total: maxSteps, query },
-    });
-
-    try {
-      const { card, nextQuery } = await exploreStep(
-        query,
-        cards,
-        step,
-        keys
-      );
-      cards.push(card);
-      emit({ event: "card", data: card });
-      query = nextQuery;
-    } catch (err) {
-      emit({
-        event: "error",
-        data: { message: err instanceof Error ? err.message : String(err) },
-      });
-    }
-  }
-
-  emit({ event: "done", data: { totalCards: cards.length } });
-}
