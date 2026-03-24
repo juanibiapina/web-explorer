@@ -77,10 +77,61 @@ All detail fields are optional. Include what the search results tell you. Skip w
 Rules:
 - Be genuinely curious. Don't pick the most obvious result.
 - Follow surprising connections. The best threads come from unexpected links between topics.
-- Vary your card types. Don't just pick articles.
 - CRITICAL: Your nextQuery must explore a DIFFERENT angle, not the same story again.
 - Write like a real person, not a content summarizer.
-- Your nextQuery should feel like a natural thought: "Wait, if they did X, what about Y?"`;
+- Your nextQuery should feel like a natural thought: "Wait, if they did X, what about Y?"
+
+Content diversity:
+- The feed must be a mix of content types: articles, GitHub repos, tools, people, discussions, videos, papers, communities.
+- Don't default to articles. Actively look for the person behind the project, the tool that enables the technique, the community where practitioners gather, the repo where the code lives.
+- Craft nextQuery to surface different content types. Examples:
+  - To find repos: include "github", "open source", or "library" in the query.
+  - To find people: search for "creator of", "inventor of", "interview with".
+  - To find tools: search for "tool for", "app for", "alternative to".
+  - To find discussions: include "reddit", "forum", "discussion", "debate".
+  - To find videos: include "talk", "conference", "presentation", "documentary".
+  - To find papers: include "research paper", "study", "arxiv".
+- Think of the feed like a magazine, not a news ticker. A good magazine has profiles, reviews, essays, interviews, and recommendations, not just article after article.`;
+
+const CARD_TYPES = [
+  "article",
+  "repo",
+  "person",
+  "thread",
+  "paper",
+  "tool",
+  "video",
+  "community",
+];
+
+/**
+ * Build a diversity hint when recent cards are too same-typed.
+ * Returns an empty string when the feed is already varied.
+ */
+export function buildDiversityHint(previousCards: Card[]): string {
+  if (previousCards.length < 2) return "";
+
+  // Check for a streak of the same type at the end
+  const lastType = previousCards[previousCards.length - 1].type;
+  let streak = 0;
+  for (let i = previousCards.length - 1; i >= 0; i--) {
+    if (previousCards[i].type === lastType) streak++;
+    else break;
+  }
+
+  if (streak < 2) return "";
+
+  // Suggest types that haven't appeared recently
+  const recentTypes = new Set(previousCards.slice(-5).map((c) => c.type));
+  const underrepresented = CARD_TYPES.filter((t) => !recentTypes.has(t));
+
+  const suggestions =
+    underrepresented.length > 0
+      ? ` Try finding: ${underrepresented.slice(0, 3).join(", ")}.`
+      : "";
+
+  return `\n\nDIVERSITY NOTE: The last ${streak} cards have all been "${lastType}" type. Mix it up! Craft your nextQuery to surface a different kind of content.${suggestions}`;
+}
 
 interface ExploreKeys {
   tavilyKey: string;
@@ -143,12 +194,14 @@ export async function exploreStep(
     ? `\nRecent exploration path:\n${recentCards.map((c) => `> "${c.title}" (${c.type}) - ${c.whyInteresting}`).join("\n")}\n`
     : "";
 
+  const diversityHint = buildDiversityHint(previousCards);
+
   const result = await llm(
     [
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Search query: "${query}"${contextText}\nSearch results:\n${resultsText}\n\nPick the most interesting result, create a card, and tell me where to go next.`,
+        content: `Search query: "${query}"${contextText}\nSearch results:\n${resultsText}${diversityHint}\n\nPick the most interesting result, create a card, and tell me where to go next.`,
       },
     ],
     keys.llmKey
