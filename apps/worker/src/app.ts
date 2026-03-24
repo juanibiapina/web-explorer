@@ -77,10 +77,11 @@ export const createApp = (env: Env) => {
 
   app.post("/api/trigger", async (c) => {
     const date = c.req.query("date") ?? todayUTC();
+    const mode = c.req.query("mode") === "follow" ? "follow" as const : "search" as const;
     const indexId = env.INDEX_DO.idFromName("index");
     const index = env.INDEX_DO.get(indexId);
-    const hexId = await index.createExploration(date);
-    return c.json({ date, explorationId: hexId });
+    const hexId = await index.createExploration(date, mode);
+    return c.json({ date, mode, explorationId: hexId });
   });
 
   return app;

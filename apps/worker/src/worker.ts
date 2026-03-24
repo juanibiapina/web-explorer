@@ -22,6 +22,6 @@ export default {
   async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
     const indexId = env.INDEX_DO.idFromName("index");
     const index = env.INDEX_DO.get(indexId);
-    await index.createExploration(todayUTC());
+    await index.createExploration(todayUTC(), "follow");
   },
 };
