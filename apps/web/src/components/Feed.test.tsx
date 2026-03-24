@@ -8,27 +8,38 @@ beforeAll(() => {
 });
 
 describe("Feed", () => {
-  it("shows connecting message when not connected", () => {
-    render(<Feed events={[]} connected={false} />);
-    expect(screen.getByText("connecting to stream")).toBeInTheDocument();
-  });
-
-  it("shows skeleton card when connected with no events", () => {
-    const { container } = render(<Feed events={[]} connected={true} />);
+  it("shows skeleton card when generating with no events", () => {
+    const { container } = render(<Feed events={[]} generating={true} />);
     expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
-    expect(screen.queryByText("connecting to stream")).not.toBeInTheDocument();
   });
 
-  it("shows skeleton card after events (persistent)", () => {
+  it("does not show skeleton when not generating", () => {
+    const { container } = render(<Feed events={[]} generating={false} />);
+    expect(container.querySelector(".animate-pulse")).not.toBeInTheDocument();
+  });
+
+  it("shows skeleton card during generation after events", () => {
     const events: StreamEvent[] = [
       {
         event: "seed",
         data: { query: "mushroom architecture", reason: "testing" },
       },
     ];
-    const { container } = render(<Feed events={events} connected={true} />);
+    const { container } = render(<Feed events={events} generating={true} />);
     expect(screen.getByText(/mushroom architecture/)).toBeInTheDocument();
     expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
+  });
+
+  it("hides skeleton when generation is complete", () => {
+    const events: StreamEvent[] = [
+      {
+        event: "seed",
+        data: { query: "mushroom architecture", reason: "testing" },
+      },
+    ];
+    const { container } = render(<Feed events={events} generating={false} />);
+    expect(screen.getByText(/mushroom architecture/)).toBeInTheDocument();
+    expect(container.querySelector(".animate-pulse")).not.toBeInTheDocument();
   });
 
   it("renders card events", () => {
@@ -45,7 +56,7 @@ describe("Feed", () => {
         },
       },
     ];
-    render(<Feed events={events} connected={true} />);
+    render(<Feed events={events} generating={true} />);
     expect(screen.getByText("Mycelium Bricks")).toBeInTheDocument();
   });
 });
