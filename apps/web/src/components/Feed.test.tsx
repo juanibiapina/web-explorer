@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { Feed } from "./Feed";
 import type { StreamEvent } from "../hooks/useExplorerStream";
 
 beforeAll(() => {
-  Element.prototype.scrollIntoView = () => {};
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 describe("Feed", () => {
@@ -58,5 +58,35 @@ describe("Feed", () => {
     ];
     render(<Feed events={events} generating={true} />);
     expect(screen.getByText("Mycelium Bricks")).toBeInTheDocument();
+  });
+
+  it("does not auto-scroll on initial event load", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    const events: StreamEvent[] = [
+      {
+        event: "seed",
+        data: { query: "test topic", reason: "testing" },
+      },
+      {
+        event: "card",
+        data: {
+          id: 1,
+          title: "Test Card",
+          type: "article",
+          summary: "A test.",
+          url: "https://example.com",
+          whyInteresting: "Testing.",
+        },
+      },
+    ];
+
+    // Initial render with events (simulates history replay arriving)
+    scrollIntoView.mockClear();
+    render(<Feed events={events} generating={false} />);
+
+    // isNearBottom starts false, so scrollIntoView should not be called
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });
