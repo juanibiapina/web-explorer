@@ -7,6 +7,7 @@
  * - GET  /api/exploration/:date   - Get a specific day's exploration data
  * - GET  /api/stream              - WebSocket upgrade to today's exploration
  * - GET  /api/stream?date=:date   - WebSocket upgrade to a specific day
+ * - POST /api/trigger             - Manually trigger today's exploration (same as cron)
  */
 
 import { Hono } from "hono";
@@ -72,6 +73,14 @@ export const createApp = (env: Env) => {
     const explorationId = env.EXPLORATION_DO.idFromString(hexId);
     const stub = env.EXPLORATION_DO.get(explorationId) as DurableObjectStub<ExplorationDO>;
     return stub.fetch(c.req.raw);
+  });
+
+  app.post("/api/trigger", async (c) => {
+    const date = c.req.query("date") ?? todayUTC();
+    const indexId = env.INDEX_DO.idFromName("index");
+    const index = env.INDEX_DO.get(indexId);
+    const hexId = await index.createExploration(date);
+    return c.json({ date, explorationId: hexId });
   });
 
   return app;
