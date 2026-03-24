@@ -16,7 +16,10 @@ export class IndexDO extends DurableObject<Env> {
    * Idempotent: if an exploration already exists for this date, returns
    * the existing hex ID without creating a new one.
    */
-  async createExploration(date: string): Promise<string> {
+  async createExploration(
+    date: string,
+    mode: "search" | "follow" = "search"
+  ): Promise<string> {
     return this.ctx.blockConcurrencyWhile(async () => {
       const key = `day:${date}`;
       const existing = await this.ctx.storage.get<string>(key);
@@ -25,7 +28,7 @@ export class IndexDO extends DurableObject<Env> {
         // failed or was interrupted, re-call start() (it's idempotent).
         const existingId = this.env.EXPLORATION_DO.idFromString(existing);
         const existingStub = this.env.EXPLORATION_DO.get(existingId);
-        await existingStub.start(date);
+        await existingStub.start(date, mode);
         return existing;
       }
 
@@ -35,7 +38,7 @@ export class IndexDO extends DurableObject<Env> {
       await this.ctx.storage.put(key, hexId);
 
       const stub = this.env.EXPLORATION_DO.get(id);
-      await stub.start(date);
+      await stub.start(date, mode);
 
       return hexId;
     });

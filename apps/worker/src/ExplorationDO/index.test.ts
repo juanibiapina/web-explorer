@@ -16,7 +16,13 @@ vi.mock("../explorer/explore", () => ({
   exploreStep: vi.fn(),
 }));
 
+vi.mock("../explorer/follow", () => ({
+  followStep: vi.fn(),
+  pickLink: vi.fn(),
+}));
+
 import { pickSeed, exploreStep } from "../explorer/explore";
+import { followStep, pickLink } from "../explorer/follow";
 import type { ExplorationDO } from "./index";
 import type { Card } from "../explorer/types";
 
@@ -35,6 +41,8 @@ declare module "cloudflare:test" {
 
 const mockPickSeed = vi.mocked(pickSeed);
 const mockExploreStep = vi.mocked(exploreStep);
+const mockFollowStep = vi.mocked(followStep);
+const mockPickLink = vi.mocked(pickLink);
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -483,6 +491,204 @@ describe("ExplorationDO", () => {
       await yieldEvent();
 
       expect(messages).toHaveLength(0);
+    });
+  });
+
+  describe("follow mode", () => {
+    beforeEach(() => {
+      mockFollowStep.mockResolvedValue({
+        card: makeCard({ title: "Followed Card", url: "https://example.com/linked-page" }),
+        follow: {
+          type: "url",
+          value: "https://example.com/next-link",
+          reasoning: "Another tangent",
+        },
+      });
+      mockPickLink.mockResolvedValue({
+        type: "url",
+        value: "https://example.com/linked-page",
+        reasoning: "Found an interesting tangent",
+      });
+    });
+
+    it("step 1 uses search then picks a link for the follow chain", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24", "follow");
+
+      const { messages } = await connectWs(stub);
+      messages.length = 0;
+
+      // Step 1: pickSeed + exploreStep + pickLink
+      await runDurableObjectAlarm(stub);
+      await yieldEvent();
+
+      // Should have called exploreStep for the first card
+      expect(mockExploreStep).toHaveBeenCalled();
+      // And pickLink to find the first link to follow
+      expect(mockPickLink).toHaveBeenCalled();
+
+      const cardEvent = messages.find((m) => m.event === "card");
+      expect(cardEvent).toBeDefined();
+      expect((cardEvent!.data as Card).title).toBe("Test Card");
+    });
+
+    it("step 2+ uses followStep on the URL from pickLink", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24", "follow");
+
+      // Step 1: search-based
+      await runDurableObjectAlarm(stub);
+
+      // Clear counts so we only see step 2's calls
+      mockFollowStep.mockClear();
+      mockFollowStep.mockResolvedValue({
+        card: makeCard({ title: "Followed Card", url: "https://example.com/linked-page" }),
+        follow: {
+          type: "url",
+          value: "https://example.com/next-link",
+          reasoning: "Another tangent",
+        },
+      });
+
+      // Step 2: should use followStep
+      await runDurableObjectAlarm(stub);
+
+      expect(mockFollowStep).toHaveBeenCalledTimes(1);
+      expect(mockFollowStep).toHaveBeenCalledWith(
+        "https://example.com/linked-page",
+        expect.any(Array),
+        2,
+        expect.any(Object)
+      );
+    });
+
+    it("chains follow steps using the follow target from each step", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24", "follow");
+
+      // Step 1
+      await runDurableObjectAlarm(stub);
+
+      // Step 2: follows the URL from pickLink
+      mockFollowStep.mockResolvedValue({
+        card: makeCard({ id: 2, title: "Page B" }),
+        follow: {
+          type: "url",
+          value: "https://example.com/page-c",
+          reasoning: "Wild tangent",
+        },
+      });
+      await runDurableObjectAlarm(stub);
+
+      // Clear to isolate step 3
+      mockFollowStep.mockClear();
+
+      // Step 3: should follow the URL from step 2's follow target
+      mockFollowStep.mockResolvedValue({
+        card: makeCard({ id: 3, title: "Page C" }),
+        follow: {
+          type: "url",
+          value: "https://example.com/page-d",
+          reasoning: "Even wilder",
+        },
+      });
+      await runDurableObjectAlarm(stub);
+
+      expect(mockFollowStep).toHaveBeenCalledTimes(1);
+      // Step 3 should follow page-c (from step 2's follow)
+      expect(mockFollowStep).toHaveBeenCalledWith(
+        "https://example.com/page-c",
+        expect.any(Array),
+        3,
+        expect.any(Object)
+      );
+    });
+
+    it("falls back to search when follow returns a search query", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24", "follow");
+
+      // Step 1
+      await runDurableObjectAlarm(stub);
+
+      // Step 2: follows URL, returns search fallback
+      mockFollowStep.mockResolvedValue({
+        card: makeCard({ id: 2 }),
+        follow: {
+          type: "search",
+          value: "Richard Feynman cargo cult science",
+          reasoning: "Page mentions Feynman but has no link",
+        },
+      });
+      await runDurableObjectAlarm(stub);
+
+      // Clear to isolate step 3
+      mockExploreStep.mockClear();
+      mockPickLink.mockClear();
+
+      // Step 3: should fall back to exploreStep with the search query
+      mockExploreStep.mockResolvedValue({
+        card: makeCard({ id: 3, title: "Feynman Card", url: "https://example.com/feynman" }),
+        nextQuery: "next",
+        nextReason: "continuing",
+      });
+      mockPickLink.mockResolvedValue({
+        type: "url",
+        value: "https://example.com/feynman-link",
+        reasoning: "Found a link",
+      });
+      await runDurableObjectAlarm(stub);
+
+      // Step 3 used exploreStep (search fallback) + pickLink (to resume follow)
+      expect(mockExploreStep).toHaveBeenCalledTimes(1);
+      expect(mockExploreStep).toHaveBeenCalledWith(
+        "Richard Feynman cargo cult science",
+        expect.any(Array),
+        3,
+        expect.any(Object)
+      );
+      expect(mockPickLink).toHaveBeenCalledTimes(1);
+    });
+
+    it("completes after 12 steps in follow mode", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24", "follow");
+
+      for (let i = 0; i < 12; i++) {
+        mockFollowStep.mockResolvedValue({
+          card: makeCard({ id: i + 1, title: `Card ${i + 1}` }),
+          follow: {
+            type: "url",
+            value: `https://example.com/page-${i + 2}`,
+            reasoning: "tangent",
+          },
+        });
+        await runDurableObjectAlarm(stub);
+      }
+
+      const data = (await stub.getExploration()) as ExplorationData | null;
+      expect(data!.status).toBe("complete");
+      expect(data!.cards).toHaveLength(12);
+    });
+
+    it("broadcasts cards to WebSocket viewers in follow mode", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24", "follow");
+      const { messages } = await connectWs(stub);
+      messages.length = 0;
+
+      // Step 1 (search)
+      await runDurableObjectAlarm(stub);
+      await yieldEvent();
+
+      // Step 2 (follow)
+      await runDurableObjectAlarm(stub);
+      await yieldEvent();
+
+      const cards = messages.filter((m) => m.event === "card");
+      expect(cards).toHaveLength(2);
+      expect((cards[0].data as Card).title).toBe("Test Card"); // From search
+      expect((cards[1].data as Card).title).toBe("Followed Card"); // From follow
     });
   });
 });
