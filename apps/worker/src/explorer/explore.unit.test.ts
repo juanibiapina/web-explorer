@@ -88,13 +88,16 @@ describe("exploreStep", () => {
   });
 
   it("searches, calls LLM, and returns card with next query", async () => {
-    mockSearch.mockResolvedValue([
-      {
-        title: "Deep sea creatures",
-        url: "https://ocean.org/creatures",
-        content: "Fascinating organisms live in the deep ocean",
-      },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        {
+          title: "Deep sea creatures",
+          url: "https://ocean.org/creatures",
+          content: "Fascinating organisms live in the deep ocean",
+        },
+      ],
+      images: [],
+    });
 
     const card = makeCard({
       title: "Anglerfish Lures",
@@ -116,10 +119,13 @@ describe("exploreStep", () => {
   });
 
   it("passes search results to LLM prompt", async () => {
-    mockSearch.mockResolvedValue([
-      { title: "Result A", url: "https://a.com", content: "Content A" },
-      { title: "Result B", url: "https://b.com", content: "Content B" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "Result A", url: "https://a.com", content: "Content A" },
+        { title: "Result B", url: "https://b.com", content: "Content B" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       card: makeCard(),
@@ -137,9 +143,12 @@ describe("exploreStep", () => {
   });
 
   it("includes recent card context in LLM prompt", async () => {
-    mockSearch.mockResolvedValue([
-      { title: "Result", url: "https://r.com", content: "Content" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "Result", url: "https://r.com", content: "Content" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       card: makeCard(),
@@ -161,10 +170,83 @@ describe("exploreStep", () => {
     expect(userMessage?.content).toContain("Card Two");
   });
 
+  it("includes images in LLM prompt when available", async () => {
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "Result", url: "https://r.com", content: "Content" },
+      ],
+      images: [
+        "https://example.com/photo.jpg",
+        "https://example.com/banner.png",
+      ],
+    });
+
+    mockLlm.mockResolvedValue({
+      card: makeCard(),
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    await exploreStep("test query", [], 1, KEYS);
+
+    const userMessage = mockLlm.mock.calls[0][0].find(
+      (m: { role: string }) => m.role === "user"
+    );
+    expect(userMessage?.content).toContain("https://example.com/photo.jpg");
+    expect(userMessage?.content).toContain("https://example.com/banner.png");
+    expect(userMessage?.content).toContain("imageUrl");
+  });
+
+  it("omits images section from LLM prompt when no images", async () => {
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "Result", url: "https://r.com", content: "Content" },
+      ],
+      images: [],
+    });
+
+    mockLlm.mockResolvedValue({
+      card: makeCard(),
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    await exploreStep("test query", [], 1, KEYS);
+
+    const userMessage = mockLlm.mock.calls[0][0].find(
+      (m: { role: string }) => m.role === "user"
+    );
+    expect(userMessage?.content).not.toContain("Images found:");
+  });
+
+  it("passes imageUrl from LLM response to card", async () => {
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: ["https://example.com/photo.jpg"],
+    });
+
+    mockLlm.mockResolvedValue({
+      card: {
+        ...makeCard(),
+        imageUrl: "https://example.com/photo.jpg",
+      },
+      nextQuery: "next",
+      nextReason: "reason",
+    });
+
+    const result = await exploreStep("query", [], 1, KEYS);
+    expect(result.card.imageUrl).toBe("https://example.com/photo.jpg");
+  });
+
   it("sets card id from step number", async () => {
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       card: makeCard({ id: 999 }),
@@ -177,7 +259,7 @@ describe("exploreStep", () => {
   });
 
   it("throws when search returns no results", async () => {
-    mockSearch.mockResolvedValue([]);
+    mockSearch.mockResolvedValue({ results: [], images: [] });
 
     await expect(
       exploreStep("empty query", [], 1, KEYS)
@@ -185,9 +267,12 @@ describe("exploreStep", () => {
   });
 
   it("passes tavily key to search and llm key to llm", async () => {
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       card: makeCard(),
@@ -202,9 +287,12 @@ describe("exploreStep", () => {
   });
 
   it("throws when LLM returns response without card", async () => {
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       nextQuery: "next",
@@ -217,9 +305,12 @@ describe("exploreStep", () => {
   });
 
   it("throws when LLM returns card missing required fields", async () => {
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       card: { title: "Incomplete" },
@@ -233,9 +324,12 @@ describe("exploreStep", () => {
   });
 
   it("defaults details to empty object when LLM omits it", async () => {
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: [],
+    });
 
     const cardWithoutDetails = {
       title: "Test",
@@ -322,9 +416,12 @@ describe("buildDiversityHint", () => {
 
   it("includes diversity hint in LLM prompt when types repeat", async () => {
     vi.restoreAllMocks();
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       card: makeCard(),
@@ -348,9 +445,12 @@ describe("buildDiversityHint", () => {
 
   it("does not include diversity hint when types are varied", async () => {
     vi.restoreAllMocks();
-    mockSearch.mockResolvedValue([
-      { title: "R", url: "https://r.com", content: "C" },
-    ]);
+    mockSearch.mockResolvedValue({
+      results: [
+        { title: "R", url: "https://r.com", content: "C" },
+      ],
+      images: [],
+    });
 
     mockLlm.mockResolvedValue({
       card: makeCard(),

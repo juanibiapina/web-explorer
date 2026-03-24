@@ -8,11 +8,16 @@ export interface SearchResult {
   content: string;
 }
 
+export interface SearchResponse {
+  results: SearchResult[];
+  images: string[];
+}
+
 export async function search(
   query: string,
   apiKey: string,
   numResults = 8
-): Promise<SearchResult[]> {
+): Promise<SearchResponse> {
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -21,6 +26,7 @@ export async function search(
       query,
       max_results: numResults,
       include_raw_content: false,
+      include_images: true,
     }),
   });
 
@@ -31,10 +37,17 @@ export async function search(
 
   const data = (await res.json()) as {
     results: Array<{ title: string; url: string; content: string }>;
+    images: Array<string | { url: string }>;
   };
-  return data.results.map((r) => ({
-    title: r.title,
-    url: r.url,
-    content: r.content,
-  }));
+
+  return {
+    results: data.results.map((r) => ({
+      title: r.title,
+      url: r.url,
+      content: r.content,
+    })),
+    images: (data.images ?? []).map((img) =>
+      typeof img === "string" ? img : img.url
+    ),
+  };
 }

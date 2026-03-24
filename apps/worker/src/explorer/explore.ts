@@ -25,6 +25,7 @@ const CardSchema = z.object({
   type: z.string(),
   summary: z.string(),
   url: z.string(),
+  imageUrl: z.string().optional(),
   whyInteresting: z.string(),
   thread: z.object({
     from: z.string(),
@@ -50,6 +51,7 @@ You must respond with valid JSON matching this schema:
     "type": "article|repo|person|thread|paper|tool|video|community",
     "summary": "2-3 sentences. Write like you're texting a friend about something cool.",
     "url": "URL of the source",
+    "imageUrl": "URL of a relevant image (optional, only if one is available from the images list)",
     "whyInteresting": "Why this caught your eye. Specific and genuine.",
     "thread": {
       "from": "Title of previous card, or 'origin' if first",
@@ -176,7 +178,7 @@ export async function exploreStep(
   nextQuery: string;
   nextReason: string;
 }> {
-  const results = await search(query, keys.tavilyKey);
+  const { results, images } = await search(query, keys.tavilyKey);
 
   if (!results.length) {
     throw new Error(`No search results for "${query}"`);
@@ -188,6 +190,11 @@ export async function exploreStep(
         `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.content?.slice(0, 500) || "No preview"}`
     )
     .join("\n\n");
+
+  const imagesText =
+    images.length > 0
+      ? `\n\nImages found:\n${images.map((url, i) => `[img${i + 1}] ${url}`).join("\n")}\nIf any image is relevant to the result you pick, include it as "imageUrl" in the card.`
+      : "";
 
   const recentCards = previousCards.slice(-3);
   const contextText = recentCards.length
@@ -201,7 +208,7 @@ export async function exploreStep(
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Search query: "${query}"${contextText}\nSearch results:\n${resultsText}${diversityHint}\n\nPick the most interesting result, create a card, and tell me where to go next.`,
+        content: `Search query: "${query}"${contextText}\nSearch results:\n${resultsText}${imagesText}${diversityHint}\n\nPick the most interesting result, create a card, and tell me where to go next.`,
       },
     ],
     keys.llmKey

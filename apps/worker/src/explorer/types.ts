@@ -13,6 +13,7 @@ export interface Card {
   type: string;
   summary: string;
   url: string;
+  imageUrl?: string;
   whyInteresting: string;
   thread: CardThread;
   details: Record<string, unknown>;

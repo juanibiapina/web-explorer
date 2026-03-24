@@ -45,6 +45,40 @@ describe("Card", () => {
     render(<Card data={baseCard} borderColor="border-l-electric-cyan" />);
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
   });
+
+  it("renders image when imageUrl is provided", () => {
+    const cardWithImage = {
+      ...baseCard,
+      imageUrl: "https://example.com/mushroom.jpg",
+    };
+    render(<Card data={cardWithImage} borderColor="border-l-electric-cyan" />);
+
+    const img = screen.getByRole("img");
+    expect(img).toHaveAttribute("src", "https://example.com/mushroom.jpg");
+    expect(img).toHaveAttribute("alt", "Mushrooms as Building Material");
+  });
+
+  it("does not render image when imageUrl is absent", () => {
+    render(<Card data={baseCard} borderColor="border-l-electric-cyan" />);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("hides image on load error", () => {
+    const cardWithImage = {
+      ...baseCard,
+      imageUrl: "https://example.com/broken.jpg",
+    };
+    const { container } = render(
+      <Card data={cardWithImage} borderColor="border-l-electric-cyan" />
+    );
+
+    const img = screen.getByRole("img");
+    act(() => {
+      img.dispatchEvent(new Event("error"));
+    });
+
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+  });
 });
 
 describe("ShareButton", () => {

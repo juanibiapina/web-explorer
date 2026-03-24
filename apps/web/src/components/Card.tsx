@@ -5,6 +5,7 @@ interface CardData {
   type: string;
   summary: string;
   url: string;
+  imageUrl?: string;
   whyInteresting: string;
   details?: Record<string, unknown>;
 }
@@ -52,6 +53,8 @@ export function Card({ data, borderColor }: CardProps) {
           {data.title}
         </a>
       </h2>
+
+      {data.imageUrl && <CardImage src={data.imageUrl} alt={data.title} />}
 
       <p className="text-text-secondary text-sm mb-2 leading-relaxed">
         {data.summary}
@@ -119,6 +122,24 @@ function ShareButton({
         </svg>
       )}
     </button>
+  );
+}
+
+function CardImage({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) return null;
+
+  return (
+    <div className="mb-2 overflow-hidden rounded-sm border border-border">
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="w-full h-32 sm:h-40 object-cover"
+      />
+    </div>
   );
 }
 

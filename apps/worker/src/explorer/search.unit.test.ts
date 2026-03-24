@@ -17,7 +17,7 @@ describe("search", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("parses Tavily response into SearchResult array", async () => {
+  it("parses Tavily response into SearchResponse", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
@@ -37,12 +37,16 @@ describe("search", () => {
               score: 0.8,
             },
           ],
+          images: [
+            "https://example.com/tux.png",
+            { url: "https://example.com/kernel.jpg" },
+          ],
         }),
     });
 
-    const results = await search("linux kernel", "fake-key", 5);
+    const response = await search("linux kernel", "fake-key", 5);
 
-    expect(results).toEqual([
+    expect(response.results).toEqual([
       {
         title: "Linux Kernel",
         url: "https://kernel.org",
@@ -54,12 +58,16 @@ describe("search", () => {
         content: "Documentation",
       },
     ]);
+    expect(response.images).toEqual([
+      "https://example.com/tux.png",
+      "https://example.com/kernel.jpg",
+    ]);
   });
 
   it("sends correct request to Tavily API", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ results: [] }),
+      json: () => Promise.resolve({ results: [], images: [] }),
     });
     globalThis.fetch = mockFetch;
 
@@ -75,12 +83,13 @@ describe("search", () => {
     expect(body.query).toBe("test query");
     expect(body.max_results).toBe(3);
     expect(body.include_raw_content).toBe(false);
+    expect(body.include_images).toBe(true);
   });
 
   it("defaults to 8 results", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ results: [] }),
+      json: () => Promise.resolve({ results: [], images: [] }),
     });
     globalThis.fetch = mockFetch;
 
@@ -102,13 +111,28 @@ describe("search", () => {
     );
   });
 
-  it("returns empty array when API returns no results", async () => {
+  it("returns empty results and images when API returns none", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ results: [] }),
+      json: () => Promise.resolve({ results: [], images: [] }),
     });
 
-    const results = await search("obscure query", "key");
-    expect(results).toEqual([]);
+    const response = await search("obscure query", "key");
+    expect(response.results).toEqual([]);
+    expect(response.images).toEqual([]);
+  });
+
+  it("handles missing images field gracefully", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          results: [{ title: "Test", url: "https://test.com", content: "x" }],
+        }),
+    });
+
+    const response = await search("test", "key");
+    expect(response.results).toHaveLength(1);
+    expect(response.images).toEqual([]);
   });
 });
