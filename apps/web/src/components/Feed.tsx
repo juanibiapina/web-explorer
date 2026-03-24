@@ -20,9 +20,25 @@ interface FeedProps {
 
 export function Feed({ events, generating }: FeedProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(false);
 
+  // Track whether the user is scrolled near the bottom of the page.
+  // Starts false so initial loads (history replay, archive fetch) don't scroll.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const handleScroll = () => {
+      const scrollBottom = window.innerHeight + window.scrollY;
+      isNearBottomRef.current =
+        scrollBottom >= document.body.scrollHeight - 150;
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Auto-scroll only when the user is following the live feed at the bottom.
+  useEffect(() => {
+    if (isNearBottomRef.current) {
+      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [events.length]);
 
   return (
