@@ -1,2 +1,3 @@
 export { default } from "./worker";
-export { ExplorerDO } from "./ExplorerDO";
+export { ExplorationDO } from "./ExplorationDO";
+export { IndexDO } from "./IndexDO";

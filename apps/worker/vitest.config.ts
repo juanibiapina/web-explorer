@@ -1,8 +1,9 @@
 /**
  * Vitest config for Durable Object integration tests.
  *
- * Uses the Cloudflare Workers pool (workerd runtime). Only picks up
- * tests under ExplorerDO/ which need the DO runtime, WebSocketPair, etc.
+ * Uses the Cloudflare Workers pool (workerd runtime). Picks up tests
+ * under ExplorationDO/ and IndexDO/ which need the DO runtime,
+ * WebSocketPair, storage, alarms, etc.
  * Requires a standard Linux environment (won't work on NixOS locally).
  */
 
@@ -10,7 +11,10 @@ import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
 
 export default defineWorkersConfig({
   test: {
-    include: ["src/ExplorerDO/**/*.test.ts"],
+    include: [
+      "src/ExplorationDO/**/*.test.ts",
+      "src/IndexDO/**/*.test.ts",
+    ],
     poolOptions: {
       workers: {
         // Disabled: DO alarm writes (setAlarm) conflict with the storage
