@@ -17,7 +17,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../types";
-import type { Card, StreamEvent } from "../explorer/types";
+import type { Card, ExplorerStats, StreamEvent } from "../explorer/types";
 import { pickSeed, exploreStep } from "../explorer/explore";
 
 const BUFFER_SIZE = 50;
@@ -35,6 +35,7 @@ interface ExplorerState {
   maxSteps: number;
   running: boolean;
   consecutiveErrors: number;
+  stats: ExplorerStats;
 }
 
 export class ExplorerDO extends DurableObject<Env> {
@@ -46,10 +47,23 @@ export class ExplorerDO extends DurableObject<Env> {
     maxSteps: STEPS_PER_ROUND,
     running: false,
     consecutiveErrors: 0,
+    stats: { totalCards: 0, roundsCompleted: 0, startedAt: null },
   };
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    ctx.blockConcurrencyWhile(async () => {
+      const [totalCards, roundsCompleted, startedAt] = await Promise.all([
+        ctx.storage.get<number>("stats:totalCards"),
+        ctx.storage.get<number>("stats:roundsCompleted"),
+        ctx.storage.get<string>("stats:startedAt"),
+      ]);
+      this.state.stats = {
+        totalCards: totalCards ?? 0,
+        roundsCompleted: roundsCompleted ?? 0,
+        startedAt: startedAt ?? null,
+      };
+    });
   }
 
   /**
@@ -71,6 +85,11 @@ export class ExplorerDO extends DurableObject<Env> {
       server.send(JSON.stringify(event));
     }
     server.send(JSON.stringify({ event: "history-end", data: {} }));
+
+    // Send current stats to the new client
+    server.send(
+      JSON.stringify({ event: "stats", data: this.state.stats })
+    );
 
     // Broadcast updated viewer count to all clients (including the new one)
     this.broadcastViewerCount();
@@ -94,6 +113,15 @@ export class ExplorerDO extends DurableObject<Env> {
     };
 
     try {
+      // Record when the explorer first started
+      if (!this.state.stats.startedAt) {
+        this.state.stats.startedAt = new Date().toISOString();
+        await this.ctx.storage.put(
+          "stats:startedAt",
+          this.state.stats.startedAt
+        );
+      }
+
       // Start a new round if no query is set
       if (!this.state.query) {
         const seed = await pickSeed(keys);
@@ -128,8 +156,20 @@ export class ExplorerDO extends DurableObject<Env> {
       this.state.query = nextQuery;
       this.state.consecutiveErrors = 0;
 
+      // Update and persist card count
+      this.state.stats.totalCards++;
+      await this.ctx.storage.put(
+        "stats:totalCards",
+        this.state.stats.totalCards
+      );
+
       // Schedule next step or start a new round
       if (this.state.step >= this.state.maxSteps) {
+        this.state.stats.roundsCompleted++;
+        await this.ctx.storage.put(
+          "stats:roundsCompleted",
+          this.state.stats.roundsCompleted
+        );
         this.broadcast({
           event: "done",
           data: { totalCards: this.state.cards.length },
@@ -139,6 +179,9 @@ export class ExplorerDO extends DurableObject<Env> {
       } else {
         await this.scheduleNext(100);
       }
+
+      // Broadcast updated stats to all viewers
+      this.broadcast({ event: "stats", data: this.state.stats });
     } catch (err) {
       this.state.consecutiveErrors++;
       const message = err instanceof Error ? err.message : String(err);

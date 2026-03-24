@@ -6,6 +6,12 @@ export interface StreamEvent {
   data: unknown;
 }
 
+export interface ExplorerStats {
+  totalCards: number;
+  roundsCompleted: number;
+  startedAt: string | null;
+}
+
 /**
  * Connects to the shared exploration WebSocket stream.
  * Receives history replay on connect, then live events.
@@ -20,6 +26,7 @@ export function useExplorerStream() {
 
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [viewerCount, setViewerCount] = useState(0);
+  const [stats, setStats] = useState<ExplorerStats | null>(null);
   const replayBuffer = useRef<StreamEvent[]>([]);
   const replaying = useRef(true);
 
@@ -45,6 +52,12 @@ export function useExplorerStream() {
       return;
     }
 
+    // Stats are live-only, not part of the event feed
+    if (parsed.event === "stats") {
+      setStats(parsed.data as ExplorerStats);
+      return;
+    }
+
     if (replaying.current) {
       replayBuffer.current.push(parsed);
     } else {
@@ -60,5 +73,10 @@ export function useExplorerStream() {
     onMessage,
   });
 
-  return { events, viewerCount, connected: readyState === ReadyState.OPEN };
+  return {
+    events,
+    viewerCount,
+    stats,
+    connected: readyState === ReadyState.OPEN,
+  };
 }

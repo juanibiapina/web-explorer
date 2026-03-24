@@ -122,13 +122,17 @@ describe("ExplorerDO", () => {
   });
 
   describe("event buffer replay", () => {
-    it("sends history-end and viewer count to new connections with empty buffer", async () => {
+    it("sends history-end, stats, and viewer count to new connections with empty buffer", async () => {
       const stub = getStub(uniqueName());
       const { messages } = await connectWs(stub);
 
-      expect(messages).toHaveLength(2);
+      expect(messages).toHaveLength(3);
       expect(messages[0]).toEqual({ event: "history-end", data: {} });
-      expect(messages[1]).toEqual({ event: "viewers", data: { count: 1 } });
+      expect(messages[1]).toEqual({
+        event: "stats",
+        data: { totalCards: 0, roundsCompleted: 0, startedAt: null },
+      });
+      expect(messages[2]).toEqual({ event: "viewers", data: { count: 1 } });
     });
 
     it("replays buffered seed and card events to new connections", async () => {
@@ -545,6 +549,125 @@ describe("ExplorerDO", () => {
       // But a live viewers event should arrive after history-end
       const liveViewers = msgs2.slice(historyEnd + 1).find((m) => m.event === "viewers");
       expect(liveViewers).toBeDefined();
+
+      ws1.close();
+    });
+  });
+
+  describe("exploration stats", () => {
+    it("sends stats on connect", async () => {
+      const stub = getStub(uniqueName());
+      const { messages } = await connectWs(stub);
+
+      const statsEvent = messages.find((m) => m.event === "stats");
+      expect(statsEvent).toBeDefined();
+      expect(statsEvent!.data).toEqual({
+        totalCards: 0,
+        roundsCompleted: 0,
+        startedAt: null,
+      });
+    });
+
+    it("sends stats after history-end on connect", async () => {
+      const stub = getStub(uniqueName());
+      const { messages } = await connectWs(stub);
+
+      const historyEndIdx = messages.findIndex(
+        (m) => m.event === "history-end"
+      );
+      const statsIdx = messages.findIndex((m) => m.event === "stats");
+
+      expect(historyEndIdx).toBeGreaterThanOrEqual(0);
+      expect(statsIdx).toBeGreaterThan(historyEndIdx);
+    });
+
+    it("increments totalCards after each card", async () => {
+      const stub = getStub(uniqueName());
+      const { messages } = await connectWs(stub);
+      messages.length = 0;
+
+      await runDurableObjectAlarm(stub);
+      await waitFor(() => messages.some((m) => m.event === "stats"));
+
+      const statsEvent = messages.find((m) => m.event === "stats");
+      expect(statsEvent).toBeDefined();
+      expect(
+        (statsEvent!.data as { totalCards: number }).totalCards
+      ).toBe(1);
+    });
+
+    it("increments roundsCompleted after a full round", async () => {
+      const stub = getStub(uniqueName());
+      const { messages } = await connectWs(stub);
+
+      for (let i = 0; i < 12; i++) {
+        mockExploreStep.mockResolvedValue({
+          card: makeCard({ id: i + 1 }),
+          nextQuery: `q${i + 2}`,
+          nextReason: "continuing",
+        });
+        await runDurableObjectAlarm(stub);
+      }
+      await yieldEvent();
+
+      // Find the last stats event (after the done event)
+      const allStats = messages.filter((m) => m.event === "stats");
+      const lastStats = allStats[allStats.length - 1];
+      expect(lastStats).toBeDefined();
+      expect(
+        (lastStats!.data as { roundsCompleted: number }).roundsCompleted
+      ).toBe(1);
+      expect(
+        (lastStats!.data as { totalCards: number }).totalCards
+      ).toBe(12);
+    });
+
+    it("sets startedAt on first alarm", async () => {
+      const stub = getStub(uniqueName());
+      const { messages } = await connectWs(stub);
+      messages.length = 0;
+
+      await runDurableObjectAlarm(stub);
+      await waitFor(() => messages.some((m) => m.event === "stats"));
+
+      const statsEvent = messages.find((m) => m.event === "stats");
+      expect(
+        (statsEvent!.data as { startedAt: string | null }).startedAt
+      ).toBeTruthy();
+    });
+
+    it("persists stats across connections", async () => {
+      const stub = getStub(uniqueName());
+      const { ws: ws1 } = await connectWs(stub);
+
+      // Generate a card
+      await runDurableObjectAlarm(stub);
+      await yieldEvent();
+
+      ws1.close();
+      await yieldEvent();
+
+      // New viewer sees persisted stats on connect
+      const { messages: msgs2 } = await connectWs(stub);
+      const statsEvent = msgs2.find((m) => m.event === "stats");
+      expect(statsEvent).toBeDefined();
+      expect(
+        (statsEvent!.data as { totalCards: number }).totalCards
+      ).toBeGreaterThanOrEqual(1);
+    });
+
+    it("does not include stats in replay buffer", async () => {
+      const stub = getStub(uniqueName());
+      const { ws: ws1 } = await connectWs(stub);
+
+      await runDurableObjectAlarm(stub);
+      await yieldEvent();
+
+      const { messages: msgs2 } = await connectWs(stub);
+      const historyEnd = msgs2.findIndex((m) => m.event === "history-end");
+      const replay = msgs2.slice(0, historyEnd);
+
+      expect(replay.some((m) => m.event === "stats")).toBe(false);
 
       ws1.close();
     });
