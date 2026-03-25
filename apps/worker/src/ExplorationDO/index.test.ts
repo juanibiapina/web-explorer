@@ -622,11 +622,7 @@ describe("ExplorationDO", () => {
       });
       await runDurableObjectAlarm(stub);
 
-      // Clear to isolate step 3
-      mockExploreStep.mockClear();
-      mockPickLink.mockClear();
-
-      // Step 3: should fall back to exploreStep with the search query
+      // Set up mocks for step 3 (search fallback)
       mockExploreStep.mockResolvedValue({
         card: makeCard({ id: 3, title: "Feynman Card", url: "https://example.com/feynman" }),
         nextQuery: "next",
@@ -637,17 +633,24 @@ describe("ExplorationDO", () => {
         value: "https://example.com/feynman-link",
         reasoning: "Found a link",
       });
+
+      // Record call counts before step 3 to measure the delta.
+      // The auto-alarm (scheduled at +100ms) may fire between steps,
+      // so we can't rely on absolute counts after clearing.
+      const exploreBefore = mockExploreStep.mock.calls.length;
+      const pickLinkBefore = mockPickLink.mock.calls.length;
       await runDurableObjectAlarm(stub);
 
       // Step 3 used exploreStep (search fallback) + pickLink (to resume follow)
-      expect(mockExploreStep).toHaveBeenCalledTimes(1);
-      expect(mockExploreStep).toHaveBeenCalledWith(
+      const exploreCalls = mockExploreStep.mock.calls.slice(exploreBefore);
+      expect(exploreCalls).toHaveLength(1);
+      expect(exploreCalls[0]).toEqual([
         "Richard Feynman cargo cult science",
         expect.any(Array),
         3,
-        expect.any(Object)
-      );
-      expect(mockPickLink).toHaveBeenCalledTimes(1);
+        expect.any(Object),
+      ]);
+      expect(mockPickLink.mock.calls.length - pickLinkBefore).toBe(1);
     });
 
     it("completes after 12 steps in follow mode", async () => {
