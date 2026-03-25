@@ -63,6 +63,7 @@ export class ExplorationDO extends DurableObject<Env> {
     seed: { query: string; reason: string } | null;
     cards: Card[];
     status: "generating" | "complete" | "failed";
+    error: string | null;
   } | null> {
     const date = await this.ctx.storage.get<string>("date");
     if (!date) return null;
@@ -70,8 +71,9 @@ export class ExplorationDO extends DurableObject<Env> {
     const seed = (await this.ctx.storage.get<{ query: string; reason: string }>("seed")) ?? null;
     const cards = await this.getCards();
     const status = (await this.ctx.storage.get<string>("status")) as "generating" | "complete" | "failed";
+    const error = (await this.ctx.storage.get<string>("error")) ?? null;
 
-    return { date, seed, cards, status };
+    return { date, seed, cards, status, error };
   }
 
   /**
@@ -165,7 +167,10 @@ export class ExplorationDO extends DurableObject<Env> {
           event: "error",
           data: { message: `${message} — failed after ${MAX_CONSECUTIVE_ERRORS} attempts` },
         });
-        await this.ctx.storage.put("status", "failed");
+        await this.ctx.storage.put({
+          status: "failed",
+          error: message,
+        });
         return;
       } else {
         const retryMs = Math.min(RETRY_BASE_MS * 2 ** (newErrors - 1), RETRY_MAX_MS);

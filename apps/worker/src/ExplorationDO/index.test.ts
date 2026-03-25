@@ -32,6 +32,7 @@ interface ExplorationData {
   seed: { query: string; reason: string } | null;
   cards: Card[];
   status: "generating" | "complete" | "failed";
+  error: string | null;
 }
 
 declare module "cloudflare:test" {
@@ -189,6 +190,7 @@ describe("ExplorationDO", () => {
       expect(data!.seed).toEqual({ query: "test seed query", reason: "testing" });
       expect(data!.cards).toHaveLength(1);
       expect(data!.status).toBe("generating");
+      expect(data!.error).toBeNull();
     });
 
     it("returns complete status after all steps", async () => {
@@ -444,13 +446,39 @@ describe("ExplorationDO", () => {
       );
       expect(failError).toBeDefined();
 
-      // Status should be "failed"
+      // Status should be "failed" with the error message stored
       const data = (await stub.getExploration()) as ExplorationData | null;
       expect(data!.status).toBe("failed");
+      expect(data!.error).toBe("persistent failure");
 
       // No more alarms should be scheduled
       const ran = await runDurableObjectAlarm(stub);
       expect(ran).toBe(false);
+    });
+
+    it("clears error on restart", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24");
+
+      mockExploreStep.mockRejectedValue(new Error("persistent failure"));
+
+      // Fail 3 times to trigger failed status
+      for (let i = 0; i < 3; i++) {
+        await runDurableObjectAlarm(stub);
+      }
+      expect(((await stub.getExploration()) as ExplorationData | null)!.error).toBe("persistent failure");
+
+      // Restart clears the error
+      mockExploreStep.mockResolvedValue({
+        card: makeCard(),
+        nextQuery: "next",
+        nextReason: "continuing",
+      });
+      await stub.start("2026-03-24");
+
+      const data = (await stub.getExploration()) as ExplorationData | null;
+      expect(data!.status).toBe("generating");
+      expect(data!.error).toBeNull();
     });
 
     it("recovers after a transient error", async () => {
