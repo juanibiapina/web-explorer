@@ -12,6 +12,12 @@
   "observability": {
     "enabled": true
   },
+  "secrets": {
+    "required": [
+      "TAVILY_API_KEY",
+      "GEMINI_API_KEY"
+    ]
+  },
   "triggers": {
     "crons": ["0 6 * * *"]
   },
