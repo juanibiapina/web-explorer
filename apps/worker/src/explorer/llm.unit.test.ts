@@ -67,7 +67,7 @@ describe("llm", () => {
     expect(options.headers.Authorization).toBe("Bearer my-key");
 
     const body = JSON.parse(options.body);
-    expect(body.model).toBe("gemini-2.0-flash");
+    expect(body.model).toBe("gemini-2.5-flash-lite");
     expect(body.messages).toEqual(messages);
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.max_tokens).toBe(4096);

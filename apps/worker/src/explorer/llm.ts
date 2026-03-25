@@ -1,14 +1,15 @@
 /**
- * Google Gemini LLM client (Gemini 2.0 Flash).
+ * Google Gemini LLM client.
  * Uses the OpenAI-compatible endpoint.
  *
- * Gemini 2.5 Flash free tier only allows 20 requests/day,
- * which isn't enough for a 13-step exploration.
- * Gemini 2.0 Flash has 1500 requests/day on the free tier.
+ * Model history:
+ * - gemini-2.5-flash: 20 RPD free tier, not enough for 13-step explorations.
+ * - gemini-2.0-flash: deprecated Feb 2026, free tier quota set to 0.
+ * - gemini-2.5-flash-lite: ~1,000 RPD free tier, fast, cheapest 2.5 model.
  */
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.5-flash-lite";
 
 export interface LlmMessage {
   role: "system" | "user";
