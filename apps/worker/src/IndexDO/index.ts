@@ -12,9 +12,9 @@ import { DurableObject } from "cloudflare:workers";
 
 export class IndexDO extends DurableObject<Env> {
   /**
-   * RPC: Create a new exploration for the given date.
-   * Idempotent: if an exploration already exists for this date, returns
-   * the existing hex ID without creating a new one.
+   * RPC: Create or restart an exploration for the given date.
+   * If an exploration already exists, restarts it (start() handles the reset).
+   * This makes the trigger endpoint double as a retry mechanism.
    */
   async createExploration(
     date: string,
@@ -24,8 +24,6 @@ export class IndexDO extends DurableObject<Env> {
       const key = `day:${date}`;
       const existing = await this.ctx.storage.get<string>(key);
       if (existing) {
-        // Self-heal: if a previous call stored the mapping but start()
-        // failed or was interrupted, re-call start() (it's idempotent).
         const existingId = this.env.EXPLORATION_DO.idFromString(existing);
         const existingStub = this.env.EXPLORATION_DO.get(existingId);
         await existingStub.start(date, mode);
@@ -42,24 +40,6 @@ export class IndexDO extends DurableObject<Env> {
 
       return hexId;
     });
-  }
-
-  /**
-   * RPC: Reset a stuck exploration and restart it from scratch.
-   * Returns the hex ID, or null if no exploration exists for that date.
-   */
-  async retryExploration(
-    date: string,
-    mode: "search" | "follow" = "follow"
-  ): Promise<string | null> {
-    const key = `day:${date}`;
-    const hexId = await this.ctx.storage.get<string>(key);
-    if (!hexId) return null;
-
-    const id = this.env.EXPLORATION_DO.idFromString(hexId);
-    const stub = this.env.EXPLORATION_DO.get(id);
-    await stub.reset(mode);
-    return hexId;
   }
 
   /**

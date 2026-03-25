@@ -29,38 +29,15 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 
 export class ExplorationDO extends DurableObject<Env> {
   /**
-   * RPC: Start the exploration for a given date.
-   * Called by IndexDO. Idempotent: does nothing if already started.
+   * RPC: Start (or restart) the exploration for a given date.
+   * Called by IndexDO. If the exploration was already started, clears all
+   * state and restarts from scratch. This makes the existing trigger
+   * endpoint double as a retry mechanism for stuck explorations.
    *
    * @param mode - "search" uses web search for every step (default).
    *               "follow" searches once, then follows links from page content.
    */
   async start(date: string, mode: "search" | "follow" = "search"): Promise<void> {
-    const existing = await this.ctx.storage.get("status");
-    if (existing) return; // Already started
-
-    await this.ctx.storage.put({
-      date,
-      mode,
-      status: "generating",
-      step: 0,
-      query: null,
-      nextTarget: null,
-      consecutiveErrors: 0,
-    });
-
-    await this.ctx.storage.setAlarm(Date.now() + 100);
-  }
-
-  /**
-   * RPC: Reset a stuck exploration and restart from scratch.
-   * Clears all storage (seed, cards, progress) and re-arms the alarm loop.
-   * Use when an exploration is stuck in "generating" with no progress.
-   */
-  async reset(mode: "search" | "follow" = "search"): Promise<void> {
-    const date = await this.ctx.storage.get<string>("date");
-    if (!date) return; // Never started, nothing to reset
-
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
 

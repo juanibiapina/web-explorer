@@ -7,7 +7,6 @@
  * - GET  /api/exploration/:date   - Get a specific day's exploration data
  * - GET  /api/stream              - WebSocket upgrade to today's exploration
  * - GET  /api/stream?date=:date   - WebSocket upgrade to a specific day
- * - POST /api/exploration/:date/retry - Reset a stuck exploration and restart it
  * - POST /api/trigger             - Manually trigger today's exploration (same as cron)
  */
 
@@ -74,20 +73,6 @@ export const createApp = (env: Env) => {
     const explorationId = env.EXPLORATION_DO.idFromString(hexId);
     const stub = env.EXPLORATION_DO.get(explorationId) as DurableObjectStub<ExplorationDO>;
     return stub.fetch(c.req.raw);
-  });
-
-  app.post("/api/exploration/:date/retry", async (c) => {
-    const date = c.req.param("date");
-    const mode = c.req.query("mode") === "search" ? "search" as const : "follow" as const;
-    const indexId = env.INDEX_DO.idFromName("index");
-    const index = env.INDEX_DO.get(indexId);
-    const hexId = await index.retryExploration(date, mode);
-
-    if (!hexId) {
-      return c.json({ error: "No exploration for this date" }, 404);
-    }
-
-    return c.json({ date, mode, explorationId: hexId, retried: true });
   });
 
   app.post("/api/trigger", async (c) => {
