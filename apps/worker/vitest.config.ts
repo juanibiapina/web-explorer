@@ -24,7 +24,7 @@ export default defineWorkersConfig({
         miniflare: {
           bindings: {
             TAVILY_API_KEY: "test-tavily-key",
-            ZAI_API_KEY: "test-zai-key",
+            GEMINI_API_KEY: "test-gemini-key",
           },
         },
       },

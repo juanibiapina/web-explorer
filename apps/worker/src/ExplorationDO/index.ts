@@ -117,7 +117,7 @@ export class ExplorationDO extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const keys = {
       tavilyKey: this.env.TAVILY_API_KEY,
-      llmKey: this.env.ZAI_API_KEY,
+      llmKey: this.env.GEMINI_API_KEY,
     };
 
     const step = (await this.ctx.storage.get<number>("step")) ?? 0;

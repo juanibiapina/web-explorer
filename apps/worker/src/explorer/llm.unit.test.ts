@@ -1,5 +1,5 @@
 /**
- * Unit tests for Z.AI LLM client.
+ * Unit tests for Gemini LLM client.
  * Mocks fetch — no API key needed.
  */
 
@@ -43,7 +43,7 @@ describe("llm", () => {
     });
   });
 
-  it("sends correct request to Z.AI API", async () => {
+  it("sends correct request to Gemini API", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
@@ -62,16 +62,15 @@ describe("llm", () => {
     expect(mockFetch).toHaveBeenCalledOnce();
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe(
-      "https://api.z.ai/api/coding/paas/v4/chat/completions"
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     );
     expect(options.headers.Authorization).toBe("Bearer my-key");
 
     const body = JSON.parse(options.body);
-    expect(body.model).toBe("glm-4.7-flash");
+    expect(body.model).toBe("gemini-2.5-flash");
     expect(body.messages).toEqual(messages);
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.max_tokens).toBe(4096);
-    expect(body.reasoning_effort).toBe("medium");
   });
 
   it("throws on non-OK response with status and body", async () => {

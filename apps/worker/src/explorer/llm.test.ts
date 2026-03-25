@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { llm } from "./llm";
 
 describe("llm", () => {
-  it("returns parsed JSON from Z.AI", async () => {
-    const apiKey = process.env.ZAI_API_KEY;
+  it("returns parsed JSON from Gemini", async () => {
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.log("Skipping: ZAI_API_KEY not set");
+      console.log("Skipping: GEMINI_API_KEY not set");
       return;
     }
 

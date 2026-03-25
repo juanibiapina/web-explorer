@@ -1,9 +1,10 @@
 /**
- * Z.AI LLM client (GLM-4.7-Flash).
+ * Google Gemini LLM client (Gemini 2.5 Flash).
+ * Uses the OpenAI-compatible endpoint.
  */
 
-const BASE_URL = "https://api.z.ai/api/coding/paas/v4";
-const MODEL = "glm-4.7-flash";
+const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
+const MODEL = "gemini-2.5-flash";
 
 export interface LlmMessage {
   role: "system" | "user";
@@ -25,7 +26,6 @@ export async function llm(
       messages,
       temperature: 0.9,
       max_tokens: 4096,
-      reasoning_effort: "medium",
       response_format: { type: "json_object" },
     }),
   });
