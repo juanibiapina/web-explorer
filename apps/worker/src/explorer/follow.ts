@@ -122,10 +122,35 @@ export async function followStep(
   const { results, failures } = await extract([targetUrl], keys.tavilyKey);
 
   if (results.length === 0) {
+    // Page couldn't be fetched (blocked by site, paywall, etc.).
+    // Fall back to a search query derived from the URL path.
+    const fallbackQuery = targetUrl
+      .replace(/^https?:\/\//, "")
+      .replace(/[/_\-?&#=.]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100);
     const reason = failures.length > 0 ? failures[0].error : "unknown error";
-    throw new Error(
-      `Failed to extract content from ${targetUrl}: ${reason}`
-    );
+    return {
+      card: {
+        id: stepNum,
+        title: "Couldn't reach this page",
+        type: "article" as const,
+        summary: `Tried to follow ${targetUrl} but the page couldn't be fetched (${reason}). Searching for related content instead.`,
+        url: targetUrl,
+        whyInteresting: "Sometimes the internet says no. Let's find another way in.",
+        thread: {
+          from: previousCards.length > 0 ? previousCards[previousCards.length - 1].title : "origin",
+          reasoning: "The page was unreachable, so we're pivoting to a search to keep the thread alive.",
+        },
+        details: {},
+      },
+      follow: {
+        type: "search" as const,
+        value: fallbackQuery,
+        reasoning: `The original page was unreachable. Searching for related content to continue the thread.`,
+      },
+    };
   }
 
   const pageContent = results[0].rawContent;
@@ -194,10 +219,18 @@ export async function pickLink(
   const { results, failures } = await extract([sourceUrl], keys.tavilyKey);
 
   if (results.length === 0) {
-    const reason = failures.length > 0 ? failures[0].error : "unknown error";
-    throw new Error(
-      `Failed to extract content from ${sourceUrl}: ${reason}`
-    );
+    // Page couldn't be fetched. Fall back to a search query from the URL.
+    const fallbackQuery = sourceUrl
+      .replace(/^https?:\/\//, "")
+      .replace(/[/_\-?&#=.]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100);
+    return {
+      type: "search",
+      value: fallbackQuery,
+      reasoning: `Couldn't extract ${sourceUrl} (${failures[0]?.error ?? "unknown"}). Searching instead.`,
+    };
   }
 
   const pageContent = results[0].rawContent;

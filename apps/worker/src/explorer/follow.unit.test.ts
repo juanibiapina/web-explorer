@@ -136,7 +136,7 @@ describe("followStep", () => {
     expect(result.follow.value).toContain("Mehran Karimi Nasseri");
   });
 
-  it("throws when extraction fails", async () => {
+  it("falls back to search when extraction fails", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -147,9 +147,12 @@ describe("followStep", () => {
       }),
     });
 
-    await expect(
-      followStep("https://example.com/page", [], 1, keys)
-    ).rejects.toThrow("Failed to extract content from https://example.com/page: 403 Forbidden");
+    const result = await followStep("https://example.com/page", [], 1, keys);
+
+    expect(result.card.id).toBe(1);
+    expect(result.card.summary).toContain("403 Forbidden");
+    expect(result.follow.type).toBe("search");
+    expect(result.follow.value).toContain("example");
   });
 
   it("truncates long page content", async () => {
@@ -222,7 +225,7 @@ describe("pickLink", () => {
     expect(result.value).toContain("Feynman");
   });
 
-  it("throws when extraction fails", async () => {
+  it("falls back to search when extraction fails", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -233,8 +236,9 @@ describe("pickLink", () => {
       }),
     });
 
-    await expect(
-      pickLink("https://example.com", [], keys)
-    ).rejects.toThrow("Failed to extract content from https://example.com: Timeout");
+    const result = await pickLink("https://example.com", [], keys);
+
+    expect(result.type).toBe("search");
+    expect(result.value).toContain("example");
   });
 });
