@@ -31,7 +31,7 @@ interface ExplorationData {
   date: string;
   seed: { query: string; reason: string } | null;
   cards: Card[];
-  status: "generating" | "complete";
+  status: "generating" | "complete" | "failed";
 }
 
 declare module "cloudflare:test" {
@@ -423,7 +423,7 @@ describe("ExplorationDO", () => {
       expect(ran).toBe(true);
     });
 
-    it("resets seed after 3 consecutive errors", async () => {
+    it("marks exploration as failed after 3 consecutive errors", async () => {
       const stub = getStub();
       await stub.start("2026-03-24");
 
@@ -436,35 +436,21 @@ describe("ExplorationDO", () => {
         await yieldEvent();
       }
 
-      const resetError = messages.find(
+      const failError = messages.find(
         (m) =>
           m.event === "error" &&
           typeof (m.data as { message: string }).message === "string" &&
-          (m.data as { message: string }).message.includes("new seed")
+          (m.data as { message: string }).message.includes("failed after 3 attempts")
       );
-      expect(resetError).toBeDefined();
+      expect(failError).toBeDefined();
 
-      // Next alarm should pick a fresh seed
-      mockPickSeed.mockResolvedValue({
-        query: "fresh start",
-        reason: "reset",
-      });
-      mockExploreStep.mockResolvedValue({
-        card: makeCard({ title: "Fresh Card" }),
-        nextQuery: "next",
-        nextReason: "continuing",
-      });
+      // Status should be "failed"
+      const data = (await stub.getExploration()) as ExplorationData | null;
+      expect(data!.status).toBe("failed");
 
-      messages.length = 0;
-      await runDurableObjectAlarm(stub);
-      await waitFor(() => messages.some((m) => m.event === "seed"));
-
-      const seedEvent = messages.find((m) => m.event === "seed");
-      expect(seedEvent).toBeDefined();
-      expect(seedEvent!.data).toEqual({
-        query: "fresh start",
-        reason: "reset",
-      });
+      // No more alarms should be scheduled
+      const ran = await runDurableObjectAlarm(stub);
+      expect(ran).toBe(false);
     });
 
     it("recovers after a transient error", async () => {
