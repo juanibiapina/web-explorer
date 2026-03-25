@@ -122,20 +122,52 @@ describe("ExplorationDO", () => {
       expect(ran).toBe(true);
     });
 
-    it("is idempotent — calling start twice does not reset", async () => {
+    it("restarts from scratch when called again", async () => {
       const stub = getStub();
       await stub.start("2026-03-24");
 
-      // Run first alarm (picks seed, does step 1)
+      // Run a few steps
+      await runDurableObjectAlarm(stub);
       await runDurableObjectAlarm(stub);
 
-      // Call start again — should be a no-op
+      const before = (await stub.getExploration()) as ExplorationData | null;
+      expect(before!.cards).toHaveLength(2);
+      expect(before!.seed).not.toBeNull();
+
+      // Call start again — should reset
       await stub.start("2026-03-24");
 
-      // Run next alarm — should continue at step 2, not restart
-      await runDurableObjectAlarm(stub);
+      const after = (await stub.getExploration()) as ExplorationData | null;
+      expect(after!.status).toBe("generating");
+      expect(after!.cards).toHaveLength(0);
+      expect(after!.seed).toBeNull();
+      expect(after!.date).toBe("2026-03-24");
 
+      // Alarm should be re-armed
+      mockPickSeed.mockClear();
+      const ran = await runDurableObjectAlarm(stub);
+      expect(ran).toBe(true);
       expect(mockPickSeed).toHaveBeenCalledTimes(1);
+    });
+
+    it("restarts a completed exploration", async () => {
+      const stub = getStub();
+      await stub.start("2026-03-24");
+
+      for (let i = 0; i < 12; i++) {
+        await runDurableObjectAlarm(stub);
+      }
+      expect(((await stub.getExploration()) as ExplorationData | null)!.status).toBe("complete");
+
+      await stub.start("2026-03-24");
+
+      const data = (await stub.getExploration()) as ExplorationData | null;
+      expect(data!.status).toBe("generating");
+      expect(data!.cards).toHaveLength(0);
+
+      // Alarm should fire and produce new cards
+      await runDurableObjectAlarm(stub);
+      expect(((await stub.getExploration()) as ExplorationData | null)!.cards).toHaveLength(1);
     });
   });
 
