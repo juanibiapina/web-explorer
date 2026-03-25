@@ -23,6 +23,7 @@ import { followStep, pickLink } from "../explorer/follow";
 import type { FollowTarget } from "../explorer/follow";
 
 const STEPS_PER_EXPLORATION = 12;
+const STEP_INTERVAL_MS = 60_000; // 1 minute between steps (avoids rate limits)
 const RETRY_BASE_MS = 5000;
 const RETRY_MAX_MS = 120000;
 const MAX_CONSECUTIVE_ERRORS = 3;
@@ -61,14 +62,14 @@ export class ExplorationDO extends DurableObject<Env> {
     date: string;
     seed: { query: string; reason: string } | null;
     cards: Card[];
-    status: "generating" | "complete";
+    status: "generating" | "complete" | "failed";
   } | null> {
     const date = await this.ctx.storage.get<string>("date");
     if (!date) return null;
 
     const seed = (await this.ctx.storage.get<{ query: string; reason: string }>("seed")) ?? null;
     const cards = await this.getCards();
-    const status = (await this.ctx.storage.get<string>("status")) as "generating" | "complete";
+    const status = (await this.ctx.storage.get<string>("status")) as "generating" | "complete" | "failed";
 
     return { date, seed, cards, status };
   }
@@ -153,7 +154,7 @@ export class ExplorationDO extends DurableObject<Env> {
         const totalCards = (await this.getCards()).length;
         this.broadcast({ event: "done", data: { totalCards } });
       } else {
-        await this.ctx.storage.setAlarm(Date.now() + 100);
+        await this.ctx.storage.setAlarm(Date.now() + STEP_INTERVAL_MS);
       }
     } catch (err) {
       const newErrors = consecutiveErrors + 1;
@@ -162,18 +163,10 @@ export class ExplorationDO extends DurableObject<Env> {
       if (newErrors >= MAX_CONSECUTIVE_ERRORS) {
         this.broadcast({
           event: "error",
-          data: { message: `${message} — too many errors, retrying with a new seed` },
+          data: { message: `${message} — failed after ${MAX_CONSECUTIVE_ERRORS} attempts` },
         });
-        const staleKeys = await this.ctx.storage.list({ prefix: "card:" });
-        await this.ctx.storage.delete(["seed", ...staleKeys.keys()]);
-
-        await this.ctx.storage.put({
-          step: 0,
-          query: null,
-          nextTarget: null,
-          consecutiveErrors: 0,
-        });
-        await this.ctx.storage.setAlarm(Date.now() + RETRY_BASE_MS);
+        await this.ctx.storage.put("status", "failed");
+        return;
       } else {
         const retryMs = Math.min(RETRY_BASE_MS * 2 ** (newErrors - 1), RETRY_MAX_MS);
         this.broadcast({
