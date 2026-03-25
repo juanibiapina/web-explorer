@@ -45,6 +45,24 @@ export class IndexDO extends DurableObject<Env> {
   }
 
   /**
+   * RPC: Reset a stuck exploration and restart it from scratch.
+   * Returns the hex ID, or null if no exploration exists for that date.
+   */
+  async retryExploration(
+    date: string,
+    mode: "search" | "follow" = "follow"
+  ): Promise<string | null> {
+    const key = `day:${date}`;
+    const hexId = await this.ctx.storage.get<string>(key);
+    if (!hexId) return null;
+
+    const id = this.env.EXPLORATION_DO.idFromString(hexId);
+    const stub = this.env.EXPLORATION_DO.get(id);
+    await stub.reset(mode);
+    return hexId;
+  }
+
+  /**
    * RPC: Get the ExplorationDO hex ID for a given date.
    * Returns null if no exploration exists for that date.
    */

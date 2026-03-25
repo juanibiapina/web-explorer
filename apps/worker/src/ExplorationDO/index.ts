@@ -53,6 +53,31 @@ export class ExplorationDO extends DurableObject<Env> {
   }
 
   /**
+   * RPC: Reset a stuck exploration and restart from scratch.
+   * Clears all storage (seed, cards, progress) and re-arms the alarm loop.
+   * Use when an exploration is stuck in "generating" with no progress.
+   */
+  async reset(mode: "search" | "follow" = "search"): Promise<void> {
+    const date = await this.ctx.storage.get<string>("date");
+    if (!date) return; // Never started, nothing to reset
+
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+
+    await this.ctx.storage.put({
+      date,
+      mode,
+      status: "generating",
+      step: 0,
+      query: null,
+      nextTarget: null,
+      consecutiveErrors: 0,
+    });
+
+    await this.ctx.storage.setAlarm(Date.now() + 100);
+  }
+
+  /**
    * RPC: Get the full exploration data for REST access.
    */
   async getExploration(): Promise<{

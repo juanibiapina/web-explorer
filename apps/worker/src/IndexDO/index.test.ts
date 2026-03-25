@@ -67,6 +67,23 @@ describe("IndexDO", () => {
     });
   });
 
+  describe("retryExploration()", () => {
+    it("returns null for nonexistent dates", async () => {
+      const index = getIndexStub();
+      const result = await index.retryExploration("2026-01-01");
+
+      expect(result).toBeNull();
+    });
+
+    it("returns the hex ID for an existing exploration", async () => {
+      const index = getIndexStub();
+      const created = await index.createExploration("2026-03-24");
+      const retried = await index.retryExploration("2026-03-24");
+
+      expect(retried).toBe(created);
+    });
+  });
+
   describe("getExplorationId()", () => {
     it("returns null for nonexistent dates", async () => {
       const index = getIndexStub();
