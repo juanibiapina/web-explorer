@@ -48,7 +48,7 @@ const validFollowResponse = {
 
 describe("followStep", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("extracts page content and creates card with next follow target", async () => {
@@ -174,7 +174,7 @@ describe("followStep", () => {
 
 describe("pickLink", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("extracts page and picks an interesting link", async () => {
