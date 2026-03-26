@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { llm } from "./llm";
+import { llm, extractJson } from "./llm";
 import type { AiBinding } from "./llm";
 
 function mockAi(response: string): AiBinding {
@@ -14,6 +14,61 @@ function mockAi(response: string): AiBinding {
 function mockAiError(error: Error): AiBinding {
   return { run: vi.fn().mockRejectedValue(error) };
 }
+
+describe("extractJson", () => {
+  it("parses clean JSON", () => {
+    expect(extractJson('{"a": 1}')).toEqual({ a: 1 });
+  });
+
+  it("extracts from ```json fence", () => {
+    const text = 'Here is the result:\n\n```json\n{"a": 1}\n```\n\nHope that helps!';
+    expect(extractJson(text)).toEqual({ a: 1 });
+  });
+
+  it("extracts from ``` fence without json label", () => {
+    const text = '```\n{"a": 1}\n```';
+    expect(extractJson(text)).toEqual({ a: 1 });
+  });
+
+  it("extracts JSON buried in prose", () => {
+    const text = 'Here is the most interesting finding:\n\n{"title": "Test", "type": "article"}';
+    expect(extractJson(text)).toEqual({ title: "Test", type: "article" });
+  });
+
+  it("handles JSON with nested braces in prose", () => {
+    const text = 'Result: {"card": {"title": "Test"}, "nextQuery": "q"}';
+    expect(extractJson(text)).toEqual({ card: { title: "Test" }, nextQuery: "q" });
+  });
+
+  it("returns null for text with no JSON", () => {
+    expect(extractJson("no json here")).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(extractJson("")).toBeNull();
+  });
+
+  it("returns null for malformed JSON in fence", () => {
+    expect(extractJson("```json\n{broken\n```")).toBeNull();
+  });
+
+  it("handles the real production failure case", () => {
+    const text = `Here's the most interesting finding:
+
+\`\`\`
+{
+  "card": {
+    "title": "Mushrooms in Space",
+    "type": "article",
+    "summary": "Scientists are exploring mushrooms in space."
+  }
+}
+\`\`\``;
+    const result = extractJson(text);
+    expect(result).not.toBeNull();
+    expect((result as Record<string, unknown>)["card"]).toBeDefined();
+  });
+});
 
 describe("llm", () => {
   it("parses JSON from AI response", async () => {
@@ -28,6 +83,28 @@ describe("llm", () => {
       query: "quantum computing",
       reason: "fascinating",
     });
+  });
+
+  it("extracts JSON from markdown-wrapped response", async () => {
+    const ai = mockAi('Here is the result:\n\n```json\n{"query": "test", "reason": "cool"}\n```');
+
+    const result = await llm(
+      [{ role: "user", content: "pick a topic" }],
+      ai,
+    );
+
+    expect(result).toEqual({ query: "test", reason: "cool" });
+  });
+
+  it("extracts JSON from prose-wrapped response", async () => {
+    const ai = mockAi('The most interesting finding:\n\n{"query": "test", "reason": "cool"}');
+
+    const result = await llm(
+      [{ role: "user", content: "pick a topic" }],
+      ai,
+    );
+
+    expect(result).toEqual({ query: "test", reason: "cool" });
   });
 
   it("sends correct request to Workers AI", async () => {

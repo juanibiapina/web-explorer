@@ -35,6 +35,50 @@ export interface AiBinding {
   ): Promise<{ response: string }>;
 }
 
+/**
+ * Extract a JSON object from text that may contain markdown code fences
+ * or preamble. Workers AI sometimes wraps valid JSON in ```json blocks
+ * or adds conversational text before the JSON.
+ *
+ * Tries in order:
+ * 1. Direct JSON.parse (clean response)
+ * 2. Extract from markdown code fence (```json ... ``` or ``` ... ```)
+ * 3. Find first { and last } (JSON buried in prose)
+ *
+ * Returns null if no valid JSON object can be extracted.
+ */
+export function extractJson(text: string): Record<string, unknown> | null {
+  // 1. Try direct parse
+  try {
+    return JSON.parse(text);
+  } catch {
+    // continue
+  }
+
+  // 2. Try extracting from markdown code fence
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (fenceMatch) {
+    try {
+      return JSON.parse(fenceMatch[1].trim());
+    } catch {
+      // continue
+    }
+  }
+
+  // 3. Try finding the outermost { ... }
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+    } catch {
+      // give up
+    }
+  }
+
+  return null;
+}
+
 export async function llm(
   messages: LlmMessage[],
   ai: AiBinding,
@@ -51,11 +95,12 @@ export async function llm(
     throw new Error("LLM returned empty response");
   }
 
-  try {
-    return JSON.parse(content);
-  } catch {
-    throw new Error(
-      `LLM returned non-JSON content: ${content.slice(0, 200)}`,
-    );
+  const parsed = extractJson(content);
+  if (parsed) {
+    return parsed;
   }
+
+  throw new Error(
+    `LLM returned non-JSON content: ${content.slice(0, 200)}`,
+  );
 }
