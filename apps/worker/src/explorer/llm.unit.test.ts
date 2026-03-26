@@ -1,40 +1,27 @@
 /**
- * Unit tests for Gemini LLM client.
- * Mocks fetch — no API key needed.
+ * Unit tests for Workers AI LLM client.
+ * Mocks the AI binding — no API key or external calls needed.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { llm } from "./llm";
+import type { AiBinding } from "./llm";
+
+function mockAi(response: string): AiBinding {
+  return { run: vi.fn().mockResolvedValue({ response }) };
+}
+
+function mockAiError(error: Error): AiBinding {
+  return { run: vi.fn().mockRejectedValue(error) };
+}
 
 describe("llm", () => {
-  const originalFetch = globalThis.fetch;
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  it("parses JSON from LLM response content", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          choices: [
-            {
-              message: {
-                content: '{"query": "quantum computing", "reason": "fascinating"}',
-              },
-            },
-          ],
-        }),
-    });
+  it("parses JSON from AI response", async () => {
+    const ai = mockAi('{"query": "quantum computing", "reason": "fascinating"}');
 
     const result = await llm(
       [{ role: "user", content: "pick a topic" }],
-      "fake-key"
+      ai,
     );
 
     expect(result).toEqual({
@@ -43,108 +30,64 @@ describe("llm", () => {
     });
   });
 
-  it("sends correct request to Gemini API", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          choices: [{ message: { content: '{"ok": true}' } }],
-        }),
-    });
-    globalThis.fetch = mockFetch;
+  it("sends correct request to Workers AI", async () => {
+    const ai = mockAi('{"ok": true}');
 
     const messages = [
       { role: "system" as const, content: "You are helpful." },
       { role: "user" as const, content: "Hello" },
     ];
-    await llm(messages, "my-key");
+    await llm(messages, ai);
 
-    expect(mockFetch).toHaveBeenCalledOnce();
-    const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    expect(ai.run).toHaveBeenCalledOnce();
+    expect(ai.run).toHaveBeenCalledWith(
+      "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      {
+        messages,
+        temperature: 0.9,
+        max_tokens: 4096,
+        response_format: { type: "json_object" },
+      },
     );
-    expect(options.headers.Authorization).toBe("Bearer my-key");
-
-    const body = JSON.parse(options.body);
-    expect(body.model).toBe("gemini-2.5-flash-lite");
-    expect(body.messages).toEqual(messages);
-    expect(body.response_format).toEqual({ type: "json_object" });
-    expect(body.max_tokens).toBe(4096);
   });
 
-  it("throws on non-OK response with status and body", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: () => Promise.resolve("Unauthorized"),
-    });
+  it("throws when AI binding rejects", async () => {
+    const ai = mockAiError(new Error("Workers AI unavailable"));
 
     await expect(
-      llm([{ role: "user", content: "test" }], "bad-key")
-    ).rejects.toThrow("LLM API error 401: Unauthorized");
+      llm([{ role: "user", content: "test" }], ai),
+    ).rejects.toThrow("Workers AI unavailable");
   });
 
   it("throws when response content is not valid JSON", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          choices: [{ message: { content: "not json at all" } }],
-        }),
-    });
+    const ai = mockAi("not json at all");
 
     await expect(
-      llm([{ role: "user", content: "test" }], "key")
+      llm([{ role: "user", content: "test" }], ai),
     ).rejects.toThrow("LLM returned non-JSON content: not json at all");
   });
 
-  it("throws when response has no choices", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ choices: [] }),
-    });
+  it("throws when response is empty", async () => {
+    const ai = { run: vi.fn().mockResolvedValue({ response: "" }) };
 
     await expect(
-      llm([{ role: "user", content: "test" }], "key")
-    ).rejects.toThrow("LLM returned no choices");
+      llm([{ role: "user", content: "test" }], ai),
+    ).rejects.toThrow("LLM returned empty response");
   });
 
-  it("throws with finish_reason when content is empty", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          choices: [
-            {
-              message: { content: "" },
-              finish_reason: "length",
-            },
-          ],
-        }),
-    });
+  it("throws when response is null", async () => {
+    const ai = { run: vi.fn().mockResolvedValue({ response: null }) };
 
     await expect(
-      llm([{ role: "user", content: "test" }], "key")
-    ).rejects.toThrow("empty content (finish_reason: length)");
+      llm([{ role: "user", content: "test" }], ai),
+    ).rejects.toThrow("LLM returned empty response");
   });
 
-  it("throws with finish_reason when content is null", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          choices: [
-            {
-              message: { content: null },
-              finish_reason: "stop",
-            },
-          ],
-        }),
-    });
+  it("throws when response object is missing response field", async () => {
+    const ai = { run: vi.fn().mockResolvedValue({}) };
 
     await expect(
-      llm([{ role: "user", content: "test" }], "key")
-    ).rejects.toThrow("empty content");
+      llm([{ role: "user", content: "test" }], ai),
+    ).rejects.toThrow("LLM returned empty response");
   });
 });

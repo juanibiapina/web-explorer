@@ -16,12 +16,14 @@ vi.mock("./llm", () => ({
 import { pickSeed, exploreStep, buildDiversityHint } from "./explore";
 import { search } from "./search";
 import { llm } from "./llm";
+import type { AiBinding } from "./llm";
 import type { Card } from "./types";
 
 const mockSearch = vi.mocked(search);
 const mockLlm = vi.mocked(llm);
 
-const KEYS = { tavilyKey: "fake-tavily", llmKey: "fake-llm" };
+const fakeAi = { run: vi.fn() } as unknown as AiBinding;
+const KEYS = { tavilyKey: "fake-tavily", ai: fakeAi };
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -54,14 +56,14 @@ describe("pickSeed", () => {
     expect(seed.reason).toBe("Nature's own light show");
   });
 
-  it("passes the LLM key to the llm function", async () => {
+  it("passes the AI binding to the llm function", async () => {
     mockLlm.mockResolvedValue({ query: "test", reason: "test" });
 
     await pickSeed(KEYS);
 
     expect(mockLlm).toHaveBeenCalledWith(
       expect.any(Array),
-      "fake-llm"
+      fakeAi,
     );
   });
 
@@ -198,7 +200,7 @@ describe("exploreStep", () => {
     await exploreStep("query", [], 1, KEYS);
 
     expect(mockSearch).toHaveBeenCalledWith("query", "fake-tavily");
-    expect(mockLlm).toHaveBeenCalledWith(expect.any(Array), "fake-llm");
+    expect(mockLlm).toHaveBeenCalledWith(expect.any(Array), fakeAi);
   });
 
   it("throws when LLM returns response without card", async () => {

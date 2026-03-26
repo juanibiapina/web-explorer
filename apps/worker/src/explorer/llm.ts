@@ -1,68 +1,61 @@
 /**
- * Google Gemini LLM client.
- * Uses the OpenAI-compatible endpoint.
+ * LLM client using Cloudflare Workers AI.
  *
- * Model history:
+ * Runs inference on Cloudflare's edge network via the AI binding.
+ * No external API keys needed. No per-day request quotas.
+ *
+ * Model history (external):
  * - gemini-2.5-flash: 20 RPD free tier, not enough for 13-step explorations.
  * - gemini-2.0-flash: deprecated Feb 2026, free tier quota set to 0.
- * - gemini-2.5-flash-lite: ~1,000 RPD free tier, fast, cheapest 2.5 model.
+ * - gemini-2.5-flash-lite: 20 RPD free tier, still too low.
+ *
+ * Switched to Workers AI to eliminate rate limit issues entirely.
  */
 
-const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 export interface LlmMessage {
   role: "system" | "user";
   content: string;
 }
 
+/**
+ * Minimal interface for the Workers AI binding.
+ * Matches the subset of Ai we actually use, making it easy to mock in tests.
+ */
+export interface AiBinding {
+  run(
+    model: string,
+    inputs: {
+      messages: { role: string; content: string }[];
+      max_tokens?: number;
+      temperature?: number;
+      response_format?: { type: string };
+    },
+  ): Promise<{ response: string }>;
+}
+
 export async function llm(
   messages: LlmMessage[],
-  apiKey: string
+  ai: AiBinding,
 ): Promise<Record<string, unknown>> {
-  const res = await fetch(`${BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages,
-      temperature: 0.9,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-    }),
+  const result = await ai.run(MODEL, {
+    messages,
+    temperature: 0.9,
+    max_tokens: 4096,
+    response_format: { type: "json_object" },
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`LLM API error ${res.status}: ${text}`);
-  }
-
-  const data = (await res.json()) as {
-    choices: Array<{ message: { content: string }; finish_reason: string }>;
-  };
-
-  if (!data.choices?.length) {
-    throw new Error("LLM returned no choices");
-  }
-
-  const choice = data.choices[0];
-  const content = choice.message?.content;
+  const content = result?.response;
   if (!content) {
-    const reason = choice.finish_reason || "unknown";
-    throw new Error(
-      `LLM returned empty content (finish_reason: ${reason}). ` +
-        "This often means all tokens were consumed by reasoning."
-    );
+    throw new Error("LLM returned empty response");
   }
 
   try {
     return JSON.parse(content);
   } catch {
     throw new Error(
-      `LLM returned non-JSON content: ${content.slice(0, 200)}`
+      `LLM returned non-JSON content: ${content.slice(0, 200)}`,
     );
   }
 }

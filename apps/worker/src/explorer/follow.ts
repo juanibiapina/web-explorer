@@ -15,6 +15,7 @@
 import { z } from "zod";
 import { extract } from "./extract";
 import { llm } from "./llm";
+import type { AiBinding } from "./llm";
 import type { Card } from "./types";
 
 const CardSchema = z.object({
@@ -99,7 +100,7 @@ Rules:
 
 export interface FollowKeys {
   tavilyKey: string;
-  llmKey: string;
+  ai: AiBinding;
 }
 
 /**
@@ -149,7 +150,7 @@ export async function followStep(
         content: `Page URL: ${targetUrl}\n\nPage content:\n${truncated}${pathText}\nCreate a card about this page and pick the most surprising tangent to follow next.`,
       },
     ],
-    keys.llmKey
+    keys.ai
   );
 
   const parsed = FollowResponseSchema.safeParse(result);
@@ -219,7 +220,7 @@ export async function pickLink(
         content: `Page URL: ${sourceUrl}\n\nPage content:\n${truncated}${pathText}\nPick the most surprising link or reference to follow.`,
       },
     ],
-    keys.llmKey
+    keys.ai
   );
 
   const parsed = FollowTargetSchema.safeParse(result);

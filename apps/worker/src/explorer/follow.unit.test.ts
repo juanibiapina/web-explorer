@@ -1,39 +1,28 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+/**
+ * Unit tests for link-following exploration logic.
+ * Mocks extract and llm modules — no API keys or external calls needed.
+ */
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("./extract", () => ({
+  extract: vi.fn(),
+}));
+
+vi.mock("./llm", () => ({
+  llm: vi.fn(),
+}));
+
 import { followStep, pickLink } from "./follow";
+import { extract } from "./extract";
+import { llm } from "./llm";
+import type { AiBinding } from "./llm";
 
-const mockFetch = vi.fn();
+const mockExtract = vi.mocked(extract);
+const mockLlm = vi.mocked(llm);
 
-beforeEach(() => {
-  vi.stubGlobal("fetch", mockFetch);
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-function mockExtractResponse(content: string) {
-  return {
-    ok: true,
-    json: async () => ({
-      results: [{ url: "https://example.com/page", raw_content: content }],
-      failed_results: [],
-    }),
-  };
-}
-
-function mockLlmResponse(response: Record<string, unknown>) {
-  return {
-    ok: true,
-    json: async () => ({
-      choices: [
-        {
-          message: { content: JSON.stringify(response) },
-          finish_reason: "stop",
-        },
-      ],
-    }),
-  };
-}
+const fakeAi = { run: vi.fn() } as unknown as AiBinding;
+const keys = { tavilyKey: "tavily-key", ai: fakeAi };
 
 const validFollowResponse = {
   card: {
@@ -57,21 +46,23 @@ const validFollowResponse = {
   },
 };
 
-const keys = { tavilyKey: "tavily-key", llmKey: "llm-key" };
-
 describe("followStep", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("extracts page content and creates card with next follow target", async () => {
-    mockFetch
-      .mockResolvedValueOnce(
-        mockExtractResponse("Airport design involves many hidden tricks...")
-      )
-      .mockResolvedValueOnce(mockLlmResponse(validFollowResponse));
+    mockExtract.mockResolvedValue({
+      results: [{ url: "https://example.com/page", rawContent: "Airport design involves many hidden tricks..." }],
+      failures: [],
+    });
+    mockLlm.mockResolvedValue(validFollowResponse);
 
     const result = await followStep(
       "https://example.com/page",
       [],
       1,
-      keys
+      keys,
     );
 
     expect(result.card.title).toBe("The Secret Life of Airports");
@@ -79,11 +70,11 @@ describe("followStep", () => {
     expect(result.card.id).toBe(1);
     expect(result.follow.type).toBe("url");
     expect(result.follow.value).toBe(
-      "https://en.wikipedia.org/wiki/Mehran_Karimi_Nasseri"
+      "https://en.wikipedia.org/wiki/Mehran_Karimi_Nasseri",
     );
   });
 
-  it("includes previous cards as context", async () => {
+  it("includes previous cards as context in LLM prompt", async () => {
     const previousCards = [
       {
         id: 1,
@@ -97,18 +88,19 @@ describe("followStep", () => {
       },
     ];
 
-    mockFetch
-      .mockResolvedValueOnce(mockExtractResponse("Some page content"))
-      .mockResolvedValueOnce(mockLlmResponse(validFollowResponse));
+    mockExtract.mockResolvedValue({
+      results: [{ url: "https://example.com/page", rawContent: "Some page content" }],
+      failures: [],
+    });
+    mockLlm.mockResolvedValue(validFollowResponse);
 
     await followStep("https://example.com/page", previousCards, 2, keys);
 
-    // Verify the LLM call includes the exploration path
-    const llmCall = mockFetch.mock.calls[1];
-    const body = JSON.parse(llmCall[1].body);
-    const userMessage = body.messages[1].content;
-    expect(userMessage).toContain("Card One");
-    expect(userMessage).toContain("Exploration path so far");
+    const userMessage = mockLlm.mock.calls[0][0].find(
+      (m) => m.role === "user",
+    );
+    expect(userMessage?.content).toContain("Card One");
+    expect(userMessage?.content).toContain("Exploration path so far");
   });
 
   it("supports search fallback in follow target", async () => {
@@ -121,15 +113,17 @@ describe("followStep", () => {
       },
     };
 
-    mockFetch
-      .mockResolvedValueOnce(mockExtractResponse("Content mentioning Nasseri"))
-      .mockResolvedValueOnce(mockLlmResponse(searchFallback));
+    mockExtract.mockResolvedValue({
+      results: [{ url: "https://example.com/page", rawContent: "Content mentioning Nasseri" }],
+      failures: [],
+    });
+    mockLlm.mockResolvedValue(searchFallback);
 
     const result = await followStep(
       "https://example.com/page",
       [],
       1,
-      keys
+      keys,
     );
 
     expect(result.follow.type).toBe("search");
@@ -137,84 +131,82 @@ describe("followStep", () => {
   });
 
   it("throws when extraction fails", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        results: [],
-        failed_results: [
-          { url: "https://example.com/page", error: "403 Forbidden" },
-        ],
-      }),
+    mockExtract.mockResolvedValue({
+      results: [],
+      failures: [{ url: "https://example.com/page", error: "403 Forbidden" }],
     });
 
     await expect(
-      followStep("https://example.com/page", [], 1, keys)
+      followStep("https://example.com/page", [], 1, keys),
     ).rejects.toThrow("Failed to extract content from https://example.com/page: 403 Forbidden");
   });
 
   it("truncates long page content", async () => {
     const longContent = "x".repeat(10000);
 
-    mockFetch
-      .mockResolvedValueOnce(mockExtractResponse(longContent))
-      .mockResolvedValueOnce(mockLlmResponse(validFollowResponse));
+    mockExtract.mockResolvedValue({
+      results: [{ url: "https://example.com/page", rawContent: longContent }],
+      failures: [],
+    });
+    mockLlm.mockResolvedValue(validFollowResponse);
 
     await followStep("https://example.com/page", [], 1, keys);
 
-    const llmCall = mockFetch.mock.calls[1];
-    const body = JSON.parse(llmCall[1].body);
-    const userMessage = body.messages[1].content;
-    expect(userMessage).toContain("[content truncated]");
-    // Should be truncated to ~8000 chars + metadata, not the full 10000
-    expect(userMessage.length).toBeLessThan(9000);
+    const userMessage = mockLlm.mock.calls[0][0].find(
+      (m) => m.role === "user",
+    );
+    expect(userMessage?.content).toContain("[content truncated]");
+    expect(userMessage!.content.length).toBeLessThan(9000);
   });
 
   it("throws on invalid llm response", async () => {
-    mockFetch
-      .mockResolvedValueOnce(mockExtractResponse("Content"))
-      .mockResolvedValueOnce(
-        mockLlmResponse({ card: { title: "Missing fields" } })
-      );
+    mockExtract.mockResolvedValue({
+      results: [{ url: "https://example.com/page", rawContent: "Content" }],
+      failures: [],
+    });
+    mockLlm.mockResolvedValue({ card: { title: "Missing fields" } });
 
     await expect(
-      followStep("https://example.com/page", [], 1, keys)
+      followStep("https://example.com/page", [], 1, keys),
     ).rejects.toThrow("LLM returned invalid follow response");
   });
 });
 
 describe("pickLink", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("extracts page and picks an interesting link", async () => {
-    const linkResponse = {
+    mockExtract.mockResolvedValue({
+      results: [{ url: "https://example.com/airports", rawContent: "Page about airports mentioning stateless people..." }],
+      failures: [],
+    });
+    mockLlm.mockResolvedValue({
       type: "url",
       value: "https://en.wikipedia.org/wiki/Statelessness",
       reasoning: "The article mentions stateless people in airports.",
-    };
-
-    mockFetch
-      .mockResolvedValueOnce(
-        mockExtractResponse("Page about airports mentioning stateless people...")
-      )
-      .mockResolvedValueOnce(mockLlmResponse(linkResponse));
+    });
 
     const result = await pickLink("https://example.com/airports", [], keys);
 
     expect(result.type).toBe("url");
     expect(result.value).toBe(
-      "https://en.wikipedia.org/wiki/Statelessness"
+      "https://en.wikipedia.org/wiki/Statelessness",
     );
     expect(result.reasoning).toContain("stateless");
   });
 
   it("supports search fallback", async () => {
-    const searchResponse = {
+    mockExtract.mockResolvedValue({
+      results: [{ url: "https://example.com/science", rawContent: "Content about science" }],
+      failures: [],
+    });
+    mockLlm.mockResolvedValue({
       type: "search",
       value: "cargo cult science Feynman",
       reasoning: "The page mentions Feynman's speech but doesn't link to it.",
-    };
-
-    mockFetch
-      .mockResolvedValueOnce(mockExtractResponse("Content about science"))
-      .mockResolvedValueOnce(mockLlmResponse(searchResponse));
+    });
 
     const result = await pickLink("https://example.com/science", [], keys);
 
@@ -223,18 +215,13 @@ describe("pickLink", () => {
   });
 
   it("throws when extraction fails", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        results: [],
-        failed_results: [
-          { url: "https://example.com", error: "Timeout" },
-        ],
-      }),
+    mockExtract.mockResolvedValue({
+      results: [],
+      failures: [{ url: "https://example.com", error: "Timeout" }],
     });
 
     await expect(
-      pickLink("https://example.com", [], keys)
+      pickLink("https://example.com", [], keys),
     ).rejects.toThrow("Failed to extract content from https://example.com: Timeout");
   });
 });
