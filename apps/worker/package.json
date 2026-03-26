@@ -13,7 +13,7 @@
     "test:integration": "vitest run"
   },
   "dependencies": {
-    "hono": "^4.10.7",
+    "hono": "^4.12.9",
     "zod": "^4.1.13"
   },
   "devDependencies": {
