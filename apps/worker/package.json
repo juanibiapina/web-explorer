@@ -17,14 +17,14 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.10.11",
+    "@cloudflare/vitest-pool-workers": "^0.13.4",
     "@cloudflare/workers-types": "^4.20260317.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^24.10.1",
-    "eslint": "9.39.1",
-    "typescript": "5.9.3",
-    "vitest": "^3.2.4",
+    "@types/node": "^25.5.0",
+    "eslint": "10.1.0",
+    "typescript": "6.0.2",
+    "vitest": "^4.1.1",
     "wrangler": "^4.77.0"
   }
 }

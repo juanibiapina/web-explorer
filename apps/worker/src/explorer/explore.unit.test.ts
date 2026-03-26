@@ -41,7 +41,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
 
 describe("pickSeed", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("returns query and reason from LLM", async () => {
@@ -86,7 +86,7 @@ describe("pickSeed", () => {
 
 describe("exploreStep", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("searches, calls LLM, and returns card with next query", async () => {
@@ -323,7 +323,7 @@ describe("buildDiversityHint", () => {
   });
 
   it("includes diversity hint in LLM prompt when types repeat", async () => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
     mockSearch.mockResolvedValue([
       { title: "R", url: "https://r.com", content: "C" },
     ]);
@@ -349,7 +349,7 @@ describe("buildDiversityHint", () => {
   });
 
   it("does not include diversity hint when types are varied", async () => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
     mockSearch.mockResolvedValue([
       { title: "R", url: "https://r.com", content: "C" },
     ]);
