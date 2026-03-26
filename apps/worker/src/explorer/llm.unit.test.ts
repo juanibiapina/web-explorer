@@ -30,7 +30,7 @@ describe("llm", () => {
     });
   });
 
-  it("sends correct request to Workers AI", async () => {
+  it("uses json_object mode when no schema provided", async () => {
     const ai = mockAi('{"ok": true}');
 
     const messages = [
@@ -47,6 +47,28 @@ describe("llm", () => {
         temperature: 0.9,
         max_tokens: 4096,
         response_format: { type: "json_object" },
+      },
+    );
+  });
+
+  it("uses json_schema mode when schema provided", async () => {
+    const ai = mockAi('{"name": "test"}');
+    const schema = {
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+    };
+
+    const messages = [{ role: "user" as const, content: "Hello" }];
+    await llm(messages, ai, schema);
+
+    expect(ai.run).toHaveBeenCalledWith(
+      "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      {
+        messages,
+        temperature: 0.9,
+        max_tokens: 4096,
+        response_format: { type: "json_schema", json_schema: schema },
       },
     );
   });

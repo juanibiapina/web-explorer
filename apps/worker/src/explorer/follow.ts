@@ -17,6 +17,7 @@ import { extract } from "./extract";
 import { llm } from "./llm";
 import type { AiBinding } from "./llm";
 import type { Card } from "./types";
+import { toJsonSchema } from "./schema";
 
 const CardSchema = z.object({
   title: z.string(),
@@ -150,7 +151,8 @@ export async function followStep(
         content: `Page URL: ${targetUrl}\n\nPage content:\n${truncated}${pathText}\nCreate a card about this page and pick the most surprising tangent to follow next.`,
       },
     ],
-    keys.ai
+    keys.ai,
+    toJsonSchema(FollowResponseSchema),
   );
 
   const parsed = FollowResponseSchema.safeParse(result);
@@ -220,7 +222,8 @@ export async function pickLink(
         content: `Page URL: ${sourceUrl}\n\nPage content:\n${truncated}${pathText}\nPick the most surprising link or reference to follow.`,
       },
     ],
-    keys.ai
+    keys.ai,
+    toJsonSchema(FollowTargetSchema),
   );
 
   const parsed = FollowTargetSchema.safeParse(result);

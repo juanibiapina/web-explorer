@@ -64,6 +64,7 @@ describe("pickSeed", () => {
     expect(mockLlm).toHaveBeenCalledWith(
       expect.any(Array),
       fakeAi,
+      expect.any(Object),
     );
   });
 
@@ -200,7 +201,7 @@ describe("exploreStep", () => {
     await exploreStep("query", [], 1, KEYS);
 
     expect(mockSearch).toHaveBeenCalledWith("query", "fake-tavily");
-    expect(mockLlm).toHaveBeenCalledWith(expect.any(Array), fakeAi);
+    expect(mockLlm).toHaveBeenCalledWith(expect.any(Array), fakeAi, expect.any(Object));
   });
 
   it("throws when LLM returns response without card", async () => {

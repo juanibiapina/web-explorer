@@ -10,6 +10,7 @@ import { search } from "./search";
 import { llm } from "./llm";
 import type { AiBinding } from "./llm";
 import type { Card } from "./types";
+import { toJsonSchema } from "./schema";
 
 /**
  * Zod schemas for validating LLM responses.
@@ -155,7 +156,8 @@ export async function pickSeed(keys: ExploreKeys): Promise<{
         content: `Today is ${new Date().toISOString().split("T")[0]}. Pick something to explore.`,
       },
     ],
-    keys.ai
+    keys.ai,
+    toJsonSchema(SeedResponseSchema),
   );
 
   const parsed = SeedResponseSchema.safeParse(result);
@@ -205,7 +207,8 @@ export async function exploreStep(
         content: `Search query: "${query}"${contextText}\nSearch results:\n${resultsText}${diversityHint}\n\nPick the most interesting result, create a card, and tell me where to go next.`,
       },
     ],
-    keys.ai
+    keys.ai,
+    toJsonSchema(ExploreResponseSchema),
   );
 
   const parsed = ExploreResponseSchema.safeParse(result);
