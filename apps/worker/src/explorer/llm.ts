@@ -4,6 +4,10 @@
  * Runs inference on Cloudflare's edge network via the AI binding.
  * No external API keys needed. No per-day request quotas.
  *
+ * Uses Workers AI JSON Mode with json_schema to guarantee structured
+ * output conforming to the caller's schema. The model is constrained
+ * to produce valid JSON matching the schema.
+ *
  * Model history (external):
  * - gemini-2.5-flash: 20 RPD free tier, not enough for 13-step explorations.
  * - gemini-2.0-flash: deprecated Feb 2026, free tier quota set to 0.
@@ -30,7 +34,7 @@ export interface AiBinding {
       messages: { role: string; content: string }[];
       max_tokens?: number;
       temperature?: number;
-      response_format?: { type: string };
+      response_format?: { type: string; json_schema?: Record<string, unknown> };
     },
   ): Promise<{ response: string }>;
 }
@@ -38,12 +42,18 @@ export interface AiBinding {
 export async function llm(
   messages: LlmMessage[],
   ai: AiBinding,
+  jsonSchema?: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const response_format: { type: string; json_schema?: Record<string, unknown> } =
+    jsonSchema
+      ? { type: "json_schema", json_schema: jsonSchema }
+      : { type: "json_object" };
+
   const result = await ai.run(MODEL, {
     messages,
     temperature: 0.9,
     max_tokens: 4096,
-    response_format: { type: "json_object" },
+    response_format,
   });
 
   const content = result?.response;
