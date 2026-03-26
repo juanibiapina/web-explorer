@@ -2,8 +2,8 @@
 /// <reference types="@cloudflare/workers-types" />
 
 interface Env {
+  AI: Ai;
   INDEX_DO: DurableObjectNamespace<import("./src/index").IndexDO>;
   EXPLORATION_DO: DurableObjectNamespace<import("./src/index").ExplorationDO>;
   TAVILY_API_KEY: string;
-  GEMINI_API_KEY: string;
 }

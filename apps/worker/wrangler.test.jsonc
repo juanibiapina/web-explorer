@@ -1,33 +1,15 @@
+// Wrangler config for integration tests.
+// Same as wrangler.jsonc but without the AI binding (which requires remote
+// mode and a Cloudflare login). The AI binding is never called in tests
+// because explore/follow modules are mocked.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "web-explorer",
   "main": "./src/index.ts",
   "compatibility_date": "2025-07-09",
-  "build": {
-    "command": "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @repo/web build"
-  },
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "observability": {
-    "enabled": true
-  },
-  "ai": {
-    "binding": "AI"
-  },
-  "secrets": {
-    "required": [
-      "TAVILY_API_KEY"
-    ]
-  },
-  "triggers": {
-    "crons": ["0 6 * * *"]
-  },
-  "assets": {
-    "directory": "../web/dist",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
-  },
   "durable_objects": {
     "bindings": [
       {

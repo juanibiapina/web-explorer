@@ -21,6 +21,7 @@ import type { Card, StreamEvent } from "../explorer/types";
 import { pickSeed, exploreStep } from "../explorer/explore";
 import { followStep, pickLink } from "../explorer/follow";
 import type { FollowTarget } from "../explorer/follow";
+import type { AiBinding } from "../explorer/llm";
 
 const STEPS_PER_EXPLORATION = 12;
 const STEP_INTERVAL_MS = 60_000; // 1 minute between steps (avoids rate limits)
@@ -122,7 +123,7 @@ export class ExplorationDO extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const keys = {
       tavilyKey: this.env.TAVILY_API_KEY,
-      llmKey: this.env.GEMINI_API_KEY,
+      ai: this.env.AI as unknown as AiBinding,
     };
 
     const step = (await this.ctx.storage.get<number>("step")) ?? 0;
@@ -191,7 +192,7 @@ export class ExplorationDO extends DurableObject<Env> {
   private async runSearchStep(
     newStep: number,
     cards: Card[],
-    keys: { tavilyKey: string; llmKey: string }
+    keys: { tavilyKey: string; ai: AiBinding }
   ): Promise<void> {
     const query = await this.ctx.storage.get<string>("query");
     if (!query) throw new Error("No query in storage");
@@ -223,7 +224,7 @@ export class ExplorationDO extends DurableObject<Env> {
   private async runFollowStep(
     newStep: number,
     cards: Card[],
-    keys: { tavilyKey: string; llmKey: string }
+    keys: { tavilyKey: string; ai: AiBinding }
   ): Promise<void> {
     const nextTarget = await this.ctx.storage.get<FollowTarget>("nextTarget");
 
