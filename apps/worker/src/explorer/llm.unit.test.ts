@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { llm } from "./llm";
+import { llm, extractJson } from "./llm";
 import type { AiBinding } from "./llm";
 
 function mockAi(response: string): AiBinding {
@@ -89,5 +89,78 @@ describe("llm", () => {
     await expect(
       llm([{ role: "user", content: "test" }], ai),
     ).rejects.toThrow("LLM returned empty response");
+  });
+
+  it("extracts JSON wrapped in markdown code fences", async () => {
+    const ai = mockAi('```json\n{"query": "robots", "reason": "cool"}\n```');
+
+    const result = await llm(
+      [{ role: "user", content: "pick a topic" }],
+      ai,
+    );
+
+    expect(result).toEqual({ query: "robots", reason: "cool" });
+  });
+
+  it("extracts JSON wrapped in plain code fences", async () => {
+    const ai = mockAi('```\n{"query": "robots"}\n```');
+
+    const result = await llm(
+      [{ role: "user", content: "pick a topic" }],
+      ai,
+    );
+
+    expect(result).toEqual({ query: "robots" });
+  });
+
+  it("extracts JSON with surrounding text", async () => {
+    const ai = mockAi('Here is the result:\n{"query": "robots"}\nDone.');
+
+    const result = await llm(
+      [{ role: "user", content: "pick a topic" }],
+      ai,
+    );
+
+    expect(result).toEqual({ query: "robots" });
+  });
+});
+
+describe("extractJson", () => {
+  it("parses clean JSON directly", () => {
+    expect(extractJson('{"a": 1}')).toEqual({ a: 1 });
+  });
+
+  it("extracts from ```json fence", () => {
+    expect(extractJson('```json\n{"a": 1}\n```')).toEqual({ a: 1 });
+  });
+
+  it("extracts from plain ``` fence", () => {
+    expect(extractJson('```\n{"a": 1}\n```')).toEqual({ a: 1 });
+  });
+
+  it("extracts from outermost braces", () => {
+    expect(extractJson('Here: {"a": 1} done')).toEqual({ a: 1 });
+  });
+
+  it("handles nested braces correctly", () => {
+    expect(extractJson('Result: {"a": {"b": 2}} end')).toEqual({ a: { b: 2 } });
+  });
+
+  it("returns null for non-JSON text", () => {
+    expect(extractJson("no json here")).toBeNull();
+  });
+
+  it("returns null for empty string", () => {
+    expect(extractJson("")).toBeNull();
+  });
+
+  it("returns null for malformed JSON in fences", () => {
+    expect(extractJson("```json\n{broken\n```")).toBeNull();
+  });
+
+  it("handles real Workers AI response format", () => {
+    const response = '```json\n{\n  "card": {\n    "title": "Test",\n    "type": "article"\n  }\n}\n```';
+    const result = extractJson(response);
+    expect(result).toEqual({ card: { title: "Test", type: "article" } });
   });
 });

@@ -51,11 +51,55 @@ export async function llm(
     throw new Error("LLM returned empty response");
   }
 
-  try {
-    return JSON.parse(content);
-  } catch {
+  const parsed = extractJson(content);
+  if (!parsed) {
     throw new Error(
       `LLM returned non-JSON content: ${content.slice(0, 200)}`,
     );
   }
+
+  return parsed;
+}
+
+/**
+ * Extract JSON from a string that may be wrapped in markdown code fences.
+ *
+ * Workers AI models (e.g. llama-3.3-70b) sometimes wrap JSON responses in
+ * ```json ... ``` blocks despite response_format: { type: "json_object" }.
+ *
+ * Tries in order:
+ * 1. Direct JSON.parse
+ * 2. Extract from markdown code fence (```json ... ``` or ``` ... ```)
+ * 3. Find outermost { ... } braces
+ */
+export function extractJson(text: string): Record<string, unknown> | null {
+  // 1. Direct parse
+  try {
+    return JSON.parse(text);
+  } catch {
+    // continue
+  }
+
+  // 2. Strip markdown code fences
+  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (fenceMatch) {
+    try {
+      return JSON.parse(fenceMatch[1]);
+    } catch {
+      // continue
+    }
+  }
+
+  // 3. Find outermost braces
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+    } catch {
+      // continue
+    }
+  }
+
+  return null;
 }
