@@ -16,17 +16,14 @@ export class IndexDO extends DurableObject<Env> {
    * If an exploration already exists, restarts it (start() handles the reset).
    * This makes the trigger endpoint double as a retry mechanism.
    */
-  async createExploration(
-    date: string,
-    mode: "search" | "follow" = "search"
-  ): Promise<string> {
+  async createExploration(date: string): Promise<string> {
     return this.ctx.blockConcurrencyWhile(async () => {
       const key = `day:${date}`;
       const existing = await this.ctx.storage.get<string>(key);
       if (existing) {
         const existingId = this.env.EXPLORATION_DO.idFromString(existing);
         const existingStub = this.env.EXPLORATION_DO.get(existingId);
-        await existingStub.start(date, mode);
+        await existingStub.start(date);
         return existing;
       }
 
@@ -36,7 +33,7 @@ export class IndexDO extends DurableObject<Env> {
       await this.ctx.storage.put(key, hexId);
 
       const stub = this.env.EXPLORATION_DO.get(id);
-      await stub.start(date, mode);
+      await stub.start(date);
 
       return hexId;
     });

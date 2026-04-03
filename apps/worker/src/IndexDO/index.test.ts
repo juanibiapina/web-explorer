@@ -8,12 +8,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { env } from "cloudflare:test";
 
-vi.mock("../explorer/explore", () => ({
-  pickSeed: vi.fn(),
-  exploreStep: vi.fn(),
+vi.mock("../explorer/agent", () => ({
+  runAgentStep: vi.fn(),
 }));
 
-import { pickSeed, exploreStep } from "../explorer/explore";
+import { runAgentStep } from "../explorer/agent";
 import type { IndexDO } from "./index";
 
 declare module "cloudflare:test" {
@@ -21,8 +20,7 @@ declare module "cloudflare:test" {
   interface ProvidedEnv extends Env {}
 }
 
-const mockPickSeed = vi.mocked(pickSeed);
-const mockExploreStep = vi.mocked(exploreStep);
+const mockRunAgentStep = vi.mocked(runAgentStep);
 
 /**
  * Get a fresh IndexDO stub.
@@ -37,8 +35,7 @@ describe("IndexDO", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     // Block exploration from running — we're testing IndexDO's mapping, not exploration
-    mockPickSeed.mockReturnValue(new Promise(() => {}));
-    mockExploreStep.mockReturnValue(new Promise(() => {}));
+    mockRunAgentStep.mockReturnValue(new Promise(() => {}));
   });
 
   describe("createExploration()", () => {

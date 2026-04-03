@@ -6,22 +6,22 @@
  * connect via WebSocket and get a replay of stored cards plus live updates
  * if the exploration is still generating.
  *
+ * Each alarm runs one agent step: the agent searches the web, optionally
+ * reads pages, and creates a card. The full conversation history is persisted
+ * between steps so the agent maintains continuity.
+ *
  * Lifecycle:
  * 1. IndexDO calls start(date) to kick off the alarm loop.
- * 2. First alarm picks a seed topic, stores it, broadcasts to viewers.
- * 3. Each subsequent alarm runs one exploration step (search + LLM).
- * 4. After 12 steps, status flips to "complete". No more alarms.
- * 5. Viewers connecting after completion get the full replay + done event.
- *
- * All state lives in DO storage so it survives hibernation.
+ * 2. Each alarm runs one agent step that produces one card.
+ * 3. After 12 cards, status flips to "complete". No more alarms.
+ * 4. Viewers connecting after completion get the full replay + done event.
  */
 
 import { DurableObject } from "cloudflare:workers";
+import type { ModelMessage } from "ai";
 import type { Card, StreamEvent } from "../explorer/types";
-import { pickSeed, exploreStep } from "../explorer/explore";
-import { followStep, pickLink } from "../explorer/follow";
-import type { FollowTarget } from "../explorer/follow";
-import type { AiBinding } from "../explorer/llm";
+import { runAgentStep } from "../explorer/agent";
+import type { AgentKeys } from "../explorer/agent";
 
 const STEPS_PER_EXPLORATION = 12;
 const STEP_INTERVAL_MS = 60_000; // 1 minute between steps (avoids rate limits)
@@ -32,24 +32,17 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 export class ExplorationDO extends DurableObject<Env> {
   /**
    * RPC: Start (or restart) the exploration for a given date.
-   * Called by IndexDO. If the exploration was already started, clears all
-   * state and restarts from scratch. This makes the existing trigger
-   * endpoint double as a retry mechanism for stuck explorations.
-   *
-   * @param mode - "search" uses web search for every step (default).
-   *               "follow" searches once, then follows links from page content.
+   * Called by IndexDO. Clears all state and starts fresh.
    */
-  async start(date: string, mode: "search" | "follow" = "search"): Promise<void> {
+  async start(date: string): Promise<void> {
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
 
     await this.ctx.storage.put({
       date,
-      mode,
       status: "generating",
       step: 0,
-      query: null,
-      nextTarget: null,
+      messages: [] as ModelMessage[],
       consecutiveErrors: 0,
     });
 
@@ -114,42 +107,48 @@ export class ExplorationDO extends DurableObject<Env> {
   }
 
   /**
-   * Alarm handler. Drives exploration one step at a time.
-   * Runs to completion regardless of viewer count.
-   *
-   * In "search" mode (original): every step searches the web.
-   * In "follow" mode: step 1 searches, then follows links from page content.
+   * Alarm handler. Runs one agent step per alarm.
    */
   async alarm(): Promise<void> {
-    const keys = {
+    const keys: AgentKeys = {
       tavilyKey: this.env.TAVILY_API_KEY,
-      ai: this.env.AI as unknown as AiBinding,
+      ai: this.env.AI as unknown as Ai,
     };
 
     const step = (await this.ctx.storage.get<number>("step")) ?? 0;
-    const mode = (await this.ctx.storage.get<string>("mode")) ?? "search";
     const consecutiveErrors = (await this.ctx.storage.get<number>("consecutiveErrors")) ?? 0;
 
     try {
-      // First step: pick a seed
-      if (step === 0) {
-        const seed = await pickSeed(keys);
-        await this.ctx.storage.put({
-          seed,
-          query: seed.query,
-          step: 0,
-        });
-        this.broadcast({ event: "seed", data: { query: seed.query, reason: seed.reason } });
-      }
-
       const newStep = step + 1;
       const cards = await this.getCards();
+      const messages = (await this.ctx.storage.get<ModelMessage[]>("messages")) ?? [];
 
-      if (mode === "follow") {
-        await this.runFollowStep(newStep, cards, keys);
-      } else {
-        await this.runSearchStep(newStep, cards, keys);
+      this.broadcast({
+        event: "status",
+        data: { step: newStep, total: STEPS_PER_EXPLORATION, query: "exploring..." },
+      });
+
+      const result = await runAgentStep(messages, cards, newStep, keys);
+
+      // On the first card, derive and broadcast a seed event
+      if (newStep === 1) {
+        const seed = {
+          query: result.card.thread.reasoning,
+          reason: result.card.whyInteresting,
+        };
+        await this.ctx.storage.put("seed", seed);
+        this.broadcast({ event: "seed", data: seed });
       }
+
+      // Persist the card, updated messages, and step count
+      await this.ctx.storage.put({
+        [`card:${newStep}`]: result.card,
+        step: newStep,
+        messages: result.messages,
+        consecutiveErrors: 0,
+      });
+
+      this.broadcast({ event: "card", data: result.card });
 
       // Check if exploration is complete
       if (newStep >= STEPS_PER_EXPLORATION) {
@@ -182,119 +181,6 @@ export class ExplorationDO extends DurableObject<Env> {
         await this.ctx.storage.put("consecutiveErrors", newErrors);
         await this.ctx.storage.setAlarm(Date.now() + retryMs);
       }
-    }
-  }
-
-  /**
-   * Search mode: every step searches the web for a new query.
-   * This is the original behavior.
-   */
-  private async runSearchStep(
-    newStep: number,
-    cards: Card[],
-    keys: { tavilyKey: string; ai: AiBinding }
-  ): Promise<void> {
-    const query = await this.ctx.storage.get<string>("query");
-    if (!query) throw new Error("No query in storage");
-
-    this.broadcast({
-      event: "status",
-      data: { step: newStep, total: STEPS_PER_EXPLORATION, query },
-    });
-
-    const { card, nextQuery } = await exploreStep(query, cards, newStep, keys);
-
-    await this.ctx.storage.put({
-      [`card:${newStep}`]: card,
-      step: newStep,
-      query: nextQuery,
-      consecutiveErrors: 0,
-    });
-
-    this.broadcast({ event: "card", data: card });
-  }
-
-  /**
-   * Follow mode: step 1 uses search, then follows links from page content.
-   *
-   * Step 1: search-based exploreStep, then pickLink from the card's URL.
-   * Steps 2+: followStep on the target URL, or exploreStep on a search
-   * fallback query (when a page had no good links).
-   */
-  private async runFollowStep(
-    newStep: number,
-    cards: Card[],
-    keys: { tavilyKey: string; ai: AiBinding }
-  ): Promise<void> {
-    const nextTarget = await this.ctx.storage.get<FollowTarget>("nextTarget");
-
-    if (!nextTarget) {
-      // Step 1: use search to get the first card, then pick a link to follow.
-      const query = await this.ctx.storage.get<string>("query");
-      if (!query) throw new Error("No query in storage");
-
-      this.broadcast({
-        event: "status",
-        data: { step: newStep, total: STEPS_PER_EXPLORATION, query },
-      });
-
-      const { card } = await exploreStep(query, cards, newStep, keys);
-      const follow = await pickLink(card.url, [card], keys);
-
-      await this.ctx.storage.put({
-        [`card:${newStep}`]: card,
-        step: newStep,
-        nextTarget: follow,
-        consecutiveErrors: 0,
-      });
-
-      this.broadcast({ event: "card", data: card });
-    } else if (nextTarget.type === "url") {
-      // Follow a URL: extract the page, create card, pick next link.
-      this.broadcast({
-        event: "status",
-        data: { step: newStep, total: STEPS_PER_EXPLORATION, query: nextTarget.value },
-      });
-
-      const { card, follow } = await followStep(
-        nextTarget.value,
-        cards,
-        newStep,
-        keys
-      );
-
-      await this.ctx.storage.put({
-        [`card:${newStep}`]: card,
-        step: newStep,
-        nextTarget: follow,
-        consecutiveErrors: 0,
-      });
-
-      this.broadcast({ event: "card", data: card });
-    } else {
-      // Search fallback: the previous page had no good links.
-      // Search for the query, create card, then pick a link to resume following.
-      this.broadcast({
-        event: "status",
-        data: { step: newStep, total: STEPS_PER_EXPLORATION, query: nextTarget.value },
-      });
-
-      const { card } = await exploreStep(
-        nextTarget.value,
-        cards,
-        newStep,
-        keys
-      );
-      const follow = await pickLink(card.url, [...cards, card], keys);
-
-      await this.ctx.storage.put({
-        [`card:${newStep}`]: card,
-        step: newStep,
-        nextTarget: follow,
-        consecutiveErrors: 0,
-      });
-
-      this.broadcast({ event: "card", data: card });
     }
   }
 
@@ -335,7 +221,6 @@ export class ExplorationDO extends DurableObject<Env> {
    */
   private async getCards(): Promise<Card[]> {
     const entries = await this.ctx.storage.list<Card>({ prefix: "card:" });
-    // Sort by step number (card:1, card:2, ..., card:12)
     const sorted = [...entries.entries()].sort(([a], [b]) => {
       const numA = parseInt(a.replace("card:", ""), 10);
       const numB = parseInt(b.replace("card:", ""), 10);

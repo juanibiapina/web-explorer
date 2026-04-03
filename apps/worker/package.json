@@ -13,7 +13,9 @@
     "test:integration": "vitest run"
   },
   "dependencies": {
+    "ai": "^6.0.145",
     "hono": "^4.12.9",
+    "workers-ai-provider": "^3.1.9",
     "zod": "^4.1.13"
   },
   "devDependencies": {
