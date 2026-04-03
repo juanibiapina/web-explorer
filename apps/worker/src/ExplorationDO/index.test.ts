@@ -523,10 +523,7 @@ describe("ExplorationDO", () => {
     });
 
     it("ignores malformed messages", async () => {
-      mockRunAgentStep.mockReturnValue(new Promise(() => {}));
-
       const stub = getStub();
-      await stub.start("2026-03-24");
       const { ws, messages } = await connectWs(stub);
       messages.length = 0;
 
